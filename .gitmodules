@@ -1,0 +1,3 @@
+[submodule "gym-lattice"]
+	path = gym-lattice
+	url = https://github.com/OliverW10/gym-lattice.git
