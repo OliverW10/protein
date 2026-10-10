@@ -129,10 +129,10 @@ class Lattice2DEnv(gym.Env):
 
         # Define action-observation spaces
         self.action_space = spaces.Discrete(4)
-        self.observation_space = spaces.Tuple([
-            spaces.Box(low=-2, high=1, shape=(self.grid_length, self.grid_length), dtype=np.int8), # TODO: Why -2?
-            spaces.MultiDiscrete([3, LOOKAHEAD])
-        ])
+        self.observation_space = spaces.flatten_space(spaces.Tuple([
+            spaces.Box(low=0, high=1, shape=[3, self.grid_length, self.grid_length], dtype=np.int8),
+            spaces.Box(low=0, high=1, shape=[3, LOOKAHEAD], dtype=np.int8)
+        ]))
         self.end_cenetred = end_ceneterd
 
         # Initialize values
