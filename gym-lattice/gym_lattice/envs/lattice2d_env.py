@@ -68,7 +68,7 @@ class Lattice2DEnv(gym.Env):
     """
     metadata = {'render_modes': ['human', 'ansi']}
 
-    def __init__(self, seq_fn: Callable[[], str] | str, collision_penalty=-2, trap_penalty=0.5, end_ceneterd=True):
+    def __init__(self, seq_fn: Callable[[], str] | str, collision_penalty=-2, trap_penalty=0.5, distance_penalty=0.01, end_ceneterd=True):
         """Initializes the lattice
 
         Parameters
@@ -123,6 +123,8 @@ class Lattice2DEnv(gym.Env):
             logger.error("%r (%s) must be of type 'float'" %
                          (trap_penalty, type(trap_penalty)))
             raise
+
+        self.distance_penalty = distance_penalty
 
         # Grid attributes
         self.grid_length = 2 * len(self.seq) + 1
@@ -268,8 +270,7 @@ class Lattice2DEnv(gym.Env):
 
         outfile = StringIO() if mode == 'ansi' else sys.stdout
         grid = self._draw_grid(self.state)
-        # Flip so highest y-value row is printed first
-        grid_display = np.flipud(grid).astype(str)
+        grid_display = grid.astype(str)
         desc = grid_display.tolist()
 
         # Convert everything to human-readable symbols
@@ -294,7 +295,7 @@ class Lattice2DEnv(gym.Env):
 
         # All polar molecules are cyan
         for row, col in zip(x_p, y_p):
-            desc[int(row)][int(col)] = utils.colorize(desc[int(row)][int(col)], "cyan")
+            desc[int(row)][int(col)] = utils.colorize(desc[int(row)][int(col)], "cyan", bold=True)
 
         # Provide prompt for last action
         if self.last_action is not None:
@@ -397,10 +398,12 @@ class Lattice2DEnv(gym.Env):
         state_reward = self._compute_free_energy(self.state) if self.done else 0
         collision_penalty = self.collision_penalty if collision else 0
         actual_trap_penalty = -floor(len(self.seq) * self.trap_penalty) if is_trapped else 0
+        end_position = list(self.state.keys())[-1]
+        distance_penalty = -self.distance_penalty * (abs(end_position[0]) + abs(end_position[1]))
 
         # Compute reward at timestep, the state_reward is originally
         # negative (Gibbs), so we invert its sign.
-        reward = - state_reward + collision_penalty + actual_trap_penalty
+        reward = - state_reward + collision_penalty + actual_trap_penalty + distance_penalty
 
         return reward
 
