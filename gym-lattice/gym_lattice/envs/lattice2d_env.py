@@ -20,9 +20,9 @@ ACTION_TO_STR = {
     2 : 'U', 3 : 'R'}
 
 POLY_TO_INT = {
-    'H' : 1, 'P' : 0
+    'H' : 1, 'P' : 2
 }
-LOOKAHEAD = 3
+LOOKAHEAD = 5
 POLY_TO_OBSERVATION_INT = {
     '_': 0, 'H' : 1, 'P' : 2
 }
@@ -90,12 +90,13 @@ class Lattice2DEnv(gym.Env):
         AssertionError
             If a certain polymer is not 'H' or 'P'
         """
-        self.seq_fn: Callable[[], str] = (lambda: seq_fn) if isinstance(seq_fn, str) else seq_fn
+        raw_seq_fn = (lambda: seq_fn) if isinstance(seq_fn, str) else seq_fn
+        self.seq_fn: Callable[[], str] = lambda: raw_seq_fn().upper()
         self.seq = self.seq_fn()
         try:
-            if not set(self.seq.upper()) <= set('HP'):
+            if not set(self.seq) <= set('HP'):
                 raise ValueError("%r (%s) is an invalid sequence" % (self.seq, type(self.seq)))
-            self.seq = self.seq.upper()
+            self.seq = self.seq
         except AttributeError:
             logger.error("%r (%s) must be of type 'str'" % (self.seq, type(self.seq)))
             raise
@@ -274,7 +275,7 @@ class Lattice2DEnv(gym.Env):
         # Convert everything to human-readable symbols
         for row_index, row in enumerate(desc):
             desc[row_index] = [
-                '*' if cell == '0' else 'H' if cell == '1' else 'P' if cell == '-1' else cell
+                '*' if cell == '0' else 'H' if cell == '1' else 'P' if cell == '2' else cell
                 for cell in row
             ]
 

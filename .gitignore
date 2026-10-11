@@ -1,3 +1,5 @@
 .env
 **/__pycache__/
-/logs
+logs**
+.pytest_cache/
+gym-lattice/gym_lattice.egg-info

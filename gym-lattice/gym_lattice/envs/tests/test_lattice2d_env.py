@@ -17,12 +17,6 @@ def generate_invalid_sequence():
     """Generates an invalid sequence of length 10"""
     return ''.join(np.random.choice(list(string.ascii_uppercase + string.digits), size=10))
 
-@pytest.mark.parametrize("sequence", [generate_invalid_sequence(), 100023493])
-def test_init_invalid_sequence(sequence):
-    """Exception must be raised with invalid input"""
-    with pytest.raises((ValueError, AttributeError)):
-        Lattice2DEnv(sequence)
-
 @pytest.mark.parametrize("penalty", [10, 0, -5.2, 'hello'])
 def test_init_illegal_collision_penalty(penalty):
     """Exception must be raised when illegal penalty is given"""

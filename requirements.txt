@@ -1,5 +1,5 @@
 stable-baselines3
 tensorflow
--e ./gym_lattice
+-e ./gym-lattice
 tensorboard
 pytest
