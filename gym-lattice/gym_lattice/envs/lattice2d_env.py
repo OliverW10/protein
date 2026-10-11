@@ -20,7 +20,7 @@ ACTION_TO_STR = {
     2 : 'U', 3 : 'R'}
 
 POLY_TO_INT = {
-    'H' : 1, 'P' : -1
+    'H' : 1, 'P' : 0
 }
 LOOKAHEAD = 3
 POLY_TO_OBSERVATION_INT = {
@@ -68,7 +68,7 @@ class Lattice2DEnv(gym.Env):
     """
     metadata = {'render_modes': ['human', 'ansi']}
 
-    def __init__(self, seq_fn: Callable[[], str], collision_penalty=-2, trap_penalty=0.5, end_ceneterd=True):
+    def __init__(self, seq_fn: Callable[[], str] | str, collision_penalty=-2, trap_penalty=0.5, end_ceneterd=True):
         """Initializes the lattice
 
         Parameters
@@ -90,7 +90,7 @@ class Lattice2DEnv(gym.Env):
         AssertionError
             If a certain polymer is not 'H' or 'P'
         """
-        self.seq_fn = seq_fn
+        self.seq_fn: Callable[[], str] = (lambda: seq_fn) if isinstance(seq_fn, str) else seq_fn
         self.seq = self.seq_fn()
         try:
             if not set(self.seq.upper()) <= set('HP'):
@@ -129,10 +129,13 @@ class Lattice2DEnv(gym.Env):
 
         # Define action-observation spaces
         self.action_space = spaces.Discrete(4)
-        self.observation_space = spaces.flatten_space(spaces.Tuple([
-            spaces.Box(low=0, high=1, shape=[3, self.grid_length, self.grid_length], dtype=np.int8),
-            spaces.Box(low=0, high=1, shape=[3, LOOKAHEAD], dtype=np.int8)
-        ]))
+        grid_variables = np.full((self.grid_length, self.grid_length), 3)
+        feed_variables = np.full((LOOKAHEAD), 3)
+        self.unflattened_observation_space = spaces.Tuple([
+            spaces.MultiDiscrete(grid_variables),
+            spaces.MultiDiscrete(feed_variables)
+        ])
+        self.observation_space = spaces.flatten_space(self.unflattened_observation_space)
         self.end_cenetred = end_ceneterd
 
         # Initialize values
@@ -217,10 +220,7 @@ class Lattice2DEnv(gym.Env):
                 is_trapped = True
 
         # Set-up return values
-        grid = self._draw_grid(self.state)
-        # Observation doesn't matter if episode will be over, so give whatever ('H')
-        next_residues = self.seq[idx+1:idx+1+LOOKAHEAD].ljust(LOOKAHEAD, '_')
-        observation = (grid.copy(), [POLY_TO_INT[x] for x in next_residues])
+        flattened_observation = self._calculate_observation()
         self.done = True if (len(self.state) == len(self.seq) or is_trapped) else False
         reward = self._compute_reward(is_trapped, collision)
         info = {
@@ -234,7 +234,15 @@ class Lattice2DEnv(gym.Env):
 
         terminated = self.done
         truncated = False
-        return (observation, reward, terminated, truncated, info)
+        return flattened_observation, reward, terminated, truncated, info
+
+    def _calculate_observation(self):
+        next_idx = len(self.state)+1
+        next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+LOOKAHEAD].ljust(LOOKAHEAD, '_')]
+        grid = self._draw_grid(self.state)
+        observation = (grid.copy(), next_residues)
+        flattened_observation = spaces.flatten(self.unflattened_observation_space, observation)
+        return flattened_observation
 
     def reset(self, *, seed=None, options=None):
         """Reset the environment and return ``(observation, info)``."""
@@ -252,14 +260,15 @@ class Lattice2DEnv(gym.Env):
 
         self.last_action = None
         info = {'state_chain': OrderedDict(self.state)}
-        return self.grid.copy(), info
+        return self._calculate_observation(), info
 
     def render(self, mode: str = 'human') -> Any:
         """Renders the environment"""
 
         outfile = StringIO() if mode == 'ansi' else sys.stdout
+        grid = self._draw_grid(self.state)
         # Flip so highest y-value row is printed first
-        grid_display = np.flipud(self.grid).astype(str)
+        grid_display = np.flipud(grid).astype(str)
         desc = grid_display.tolist()
 
         # Convert everything to human-readable symbols
