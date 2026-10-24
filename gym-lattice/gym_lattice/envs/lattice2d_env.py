@@ -313,7 +313,7 @@ class Lattice2DEnv(gym.Env):
         # Obtain all x-y indices of elements
         x_free, y_free = np.where(grid_display == '0')
         x_h, y_h = np.where(grid_display == '1')
-        x_p, y_p = np.where(grid_display == '-1')
+        x_p, y_p = np.where(grid_display == '2')
 
         # All unfilled spaces are gray
         for row, col in zip(x_free, y_free):
