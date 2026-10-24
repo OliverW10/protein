@@ -8,6 +8,7 @@ from io import StringIO
 import sys
 from math import floor
 from collections import OrderedDict
+from numbers import Integral, Real
 from typing import Any, Callable
 
 import gymnasium as gym
@@ -66,9 +67,9 @@ class Lattice2DEnv(gym.Env):
     mechanics model of the conformational and se quence spaces of proteins.
     Marcromolecules 22(10), 3986–3997 (1989)
     """
-    metadata = {'render_modes': ['human', 'ansi']}
+    metadata = {'render_modes': ['human', 'ansi', 'rgb_array']}
 
-    def __init__(self, seq_fn: Callable[[], str] | str, collision_penalty=-2, trap_penalty=0.5, distance_penalty=0.01, end_ceneterd=True):
+    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, distance_penalty=0.01, center_tail=True, render_crop: float = 1.0, lookahead: int = LOOKAHEAD):
         """Initializes the lattice
 
         Parameters
@@ -84,6 +85,12 @@ class Lattice2DEnv(gym.Env):
             Default is -2.
         end_centered: bool
             If the observation grid is ceneterd on the final residual
+        render_crop : float
+            Fraction of the full grid to display along each dimension, from
+            greater than 0 to 1. The crop is centered on the chain and only
+            affects rendering, not observations.
+        lookahead : int
+            Number of upcoming residues included in the observation.
 
         Raises
         ------
@@ -101,45 +108,30 @@ class Lattice2DEnv(gym.Env):
             logger.error("%r (%s) must be of type 'str'" % (self.seq, type(self.seq)))
             raise
 
-        try:
-            if collision_penalty >= 0:
-                raise ValueError("%r (%s) must be negative" %
-                                 (collision_penalty, type(collision_penalty)))
-            if not isinstance(collision_penalty, int):
-                raise ValueError("%r (%s) must be of type 'int'" %
-                                 (collision_penalty, type(collision_penalty)))
-            self.collision_penalty = collision_penalty
-        except TypeError:
-            logger.error("%r (%s) must be of type 'int'" %
-                         (collision_penalty, type(collision_penalty)))
-            raise
-
-        try:
-            if not 0 < trap_penalty < 1:
-                raise ValueError("%r (%s) must be between 0 and 1" %
-                                 (trap_penalty, type(trap_penalty)))
-            self.trap_penalty = trap_penalty
-        except TypeError:
-            logger.error("%r (%s) must be of type 'float'" %
-                         (trap_penalty, type(trap_penalty)))
-            raise
-
+        self.collision_penalty = collision_penalty
+        self.trap_penalty = trap_penalty
         self.distance_penalty = distance_penalty
 
         # Grid attributes
-        self.grid_length = 2 * len(self.seq) + 1
-        self.midpoint = (len(self.seq), len(self.seq))
+        self.grid_length = 2 * max_chain_length + 1
+        self.midpoint = (max_chain_length, max_chain_length)
 
         # Define action-observation spaces
         self.action_space = spaces.Discrete(4)
         grid_variables = np.full((self.grid_length, self.grid_length), 3)
-        feed_variables = np.full((LOOKAHEAD), 3)
+        if isinstance(lookahead, bool) or not isinstance(lookahead, Integral) or lookahead < 1:
+            raise ValueError("lookahead must be a positive integer")
+        self.lookahead = int(lookahead)
+        feed_variables = np.full((self.lookahead,), 3)
         self.unflattened_observation_space = spaces.Tuple([
             spaces.MultiDiscrete(grid_variables),
             spaces.MultiDiscrete(feed_variables)
         ])
         self.observation_space = spaces.flatten_space(self.unflattened_observation_space)
-        self.end_cenetred = end_ceneterd
+        if isinstance(render_crop, bool) or not isinstance(render_crop, Real) or not 0 < render_crop <= 1:
+            raise ValueError("render_crop must be a number greater than 0 and at most 1")
+        self.center_tail = center_tail
+        self.render_crop = render_crop
 
         # Initialize values
         self.reset()
@@ -217,10 +209,10 @@ class Lattice2DEnv(gym.Env):
                 logger.error('All molecules have been placed! Nothing can be added to the protein chain.')
                 raise
 
-            if set(self._get_adjacent_coords(next_move).values()).issubset(self.state.keys()):
-                logger.warn('Your agent was trapped! Ending the episode.')
-                self.trapped += 1
-                is_trapped = True
+        if set(self._get_adjacent_coords(next_move).values()).issubset(self.state.keys()):
+            logger.warn('Your agent was trapped! Ending the episode.')
+            self.trapped += 1
+            is_trapped = True
 
         # Set-up return values
         flattened_observation = self._calculate_observation()
@@ -240,8 +232,8 @@ class Lattice2DEnv(gym.Env):
         return flattened_observation, reward, terminated, truncated, info
 
     def _calculate_observation(self):
-        next_idx = len(self.state)
-        next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+LOOKAHEAD].ljust(LOOKAHEAD, '_')]
+        next_idx = len(self.state)+1
+        next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+self.lookahead].ljust(self.lookahead, '_')]
         grid = self._draw_grid(self.state)
         observation = (grid.copy(), next_residues)
         flattened_observation = spaces.flatten(self.unflattened_observation_space, observation)
@@ -266,11 +258,49 @@ class Lattice2DEnv(gym.Env):
         return self._calculate_observation(), info
 
     def render(self, mode: str = 'human') -> Any:
-        """Renders the environment"""
+        """Render the environment as terminal text or an RGB image."""
 
+        if mode not in ('human', 'ansi', 'rgb_array'):
+            raise ValueError(f"Unsupported render mode: {mode}")
         outfile = StringIO() if mode == 'ansi' else sys.stdout
         grid = self._draw_grid(self.state)
-        grid_display = grid.astype(str)
+        grid_display = np.flipud(grid).astype(str)
+        if self.render_crop < 1:
+            occupied_rows, occupied_cols = np.where(grid_display != '0')
+            crop_height = max(1, int(np.ceil(grid_display.shape[0] * self.render_crop)))
+            crop_width = max(1, int(np.ceil(grid_display.shape[1] * self.render_crop)))
+            center_row = int((occupied_rows.min() + occupied_rows.max()) // 2)
+            center_col = int((occupied_cols.min() + occupied_cols.max()) // 2)
+            row_start = min(
+                max(0, center_row - crop_height // 2),
+                grid_display.shape[0] - crop_height,
+            )
+            col_start = min(
+                max(0, center_col - crop_width // 2),
+                grid_display.shape[1] - crop_width,
+            )
+            row_stop = row_start + crop_height
+            col_stop = col_start + crop_width
+            grid_display = grid_display[row_start:row_stop, col_start:col_stop]
+        if mode == 'rgb_array':
+            cell_size = 24
+            image = np.full(
+                (grid_display.shape[0] * cell_size, grid_display.shape[1] * cell_size, 3),
+                (225, 225, 225),
+                dtype=np.uint8,
+            )
+            colors = {
+                '1': (34, 139, 34),
+                '2': (0, 180, 200),
+            }
+            for row, col in zip(*np.where(grid_display != '0')):
+                top = int(row) * cell_size
+                left = int(col) * cell_size
+                image[top + 1:top + cell_size - 1, left + 1:left + cell_size - 1] = colors[
+                    grid_display[row, col]
+                ]
+            return image
+
         desc = grid_display.tolist()
 
         # Convert everything to human-readable symbols
@@ -325,8 +355,8 @@ class Lattice2DEnv(gym.Env):
         x, y = coords
         adjacent_coords = {
             0 : (x - 1, y),
-            1 : (x, y - 1),
-            2 : (x, y + 1),
+            1 : (x, y + 1),
+            2 : (x, y - 1),
             3 : (x + 1, y),
         }
 
@@ -348,12 +378,12 @@ class Lattice2DEnv(gym.Env):
         self.grid.fill(0)
         last_residule = list(chain.keys())[-1]
         for coord, poly in chain.items():
-            if self.end_cenetred:
+            if self.center_tail:
                 trans_x, trans_y = tuple(sum(x) for x in zip(self.midpoint, coord, (-last_residule[0], -last_residule[1])))
             else:
                 trans_x, trans_y = tuple(sum(x) for x in zip(self.midpoint, coord))
-            # Recall that a numpy array works by indexing the rows first
-            # before the columns, that's why we interchange.
+            if trans_x < 0 or trans_x >= self.grid_length or trans_y < 0 or trans_y >= self.grid_length:
+                continue
             self.grid[(trans_y, trans_x)] = POLY_TO_INT[poly]
 
         return np.flipud(self.grid)

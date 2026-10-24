@@ -3,3 +3,4 @@ tensorflow
 -e ./gym-lattice
 tensorboard
 pytest
+matplotlib

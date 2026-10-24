@@ -2,6 +2,7 @@
 
 """Test cases for Lattice2DEnv"""
 
+import re
 import string
 import pytest
 import numpy as np
@@ -144,3 +145,70 @@ def test_trapped():
     assert terminated
     assert info["is_trapped"]
     assert reward == -5 # len(seq) * trap_penalty
+
+def test_render_crop_renders_fraction_of_grid_without_changing_observation():
+    """Fractional render cropping preserves observations."""
+    env = Lattice2DEnv(10, "HPHPH", render_crop=0.5)
+    env.step(0)
+    env.step(2)
+    observation = env._calculate_observation().copy()
+
+    rendered = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", env.render(mode="ansi").getvalue())
+    board = rendered.splitlines()[1:]
+    expected_size = 11
+
+    assert len(board) == expected_size
+    assert all(len(row) == expected_size for row in board)
+    assert np.array_equal(env._calculate_observation(), observation)
+
+def test_render_crop_defaults_to_full_grid():
+    """The default render continues to display the full grid."""
+    env = Lattice2DEnv(10, "HPHPH")
+    rendered = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", env.render(mode="ansi").getvalue())
+    board = rendered.splitlines()[1:]
+
+    assert len(board) == env.grid_length
+    assert all(len(row) == env.grid_length for row in board)
+
+@pytest.mark.parametrize("render_crop", [0, -0.1, 1.1, True, "0.5"])
+def test_render_crop_rejects_invalid_fractions(render_crop):
+    """Render crop must be a numeric fraction in the range (0, 1]."""
+    with pytest.raises(ValueError, match="render_crop"):
+        Lattice2DEnv(10, "HPHPH", render_crop=render_crop)
+
+def test_render_rgb_array_draws_chain_as_image():
+    """RGB rendering returns an image array with colored residues."""
+    env = Lattice2DEnv(10, "HPHPH")
+
+    image = env.render(mode="rgb_array")
+    midpoint = env.grid_length // 2 * 24 + 12
+
+    assert image.shape == (env.grid_length * 24, env.grid_length * 24, 3)
+    assert image.dtype == np.uint8
+    assert tuple(image[midpoint, midpoint]) == (34, 139, 34)
+
+def test_render_rgb_array_respects_render_crop():
+    """RGB image dimensions reflect the configured render crop."""
+    env = Lattice2DEnv(10, "HPHPH", render_crop=0.5)
+
+    image = env.render(mode="rgb_array")
+
+    assert image.shape == (11 * 24, 11 * 24, 3)
+
+def test_lookahead_sets_observation_size():
+    """The configured lookahead controls the feed portion of the observation."""
+    short_lookahead = Lattice2DEnv(10, "HPHPHPHP", lookahead=2)
+    default_lookahead = Lattice2DEnv(10, "HPHPHPHP")
+
+    short_observation, _ = short_lookahead.reset()
+    default_observation, _ = default_lookahead.reset()
+
+    assert short_lookahead.lookahead == 2
+    assert len(default_observation) - len(short_observation) == 3 * 3
+    assert short_lookahead.observation_space.contains(short_observation)
+
+@pytest.mark.parametrize("lookahead", [0, -1, 1.5, True])
+def test_lookahead_rejects_invalid_values(lookahead):
+    """Lookahead must be a positive integer."""
+    with pytest.raises(ValueError, match="lookahead"):
+        Lattice2DEnv(10, "HPHPH", lookahead=lookahead)
