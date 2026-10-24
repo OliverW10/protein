@@ -2,6 +2,7 @@
 
 """Test cases for Lattice2DEnv"""
 
+import re
 import string
 import pytest
 import numpy as np
@@ -144,3 +145,33 @@ def test_trapped():
     assert terminated
     assert info["is_trapped"]
     assert reward == -5 # len(seq) * trap_penalty
+
+def test_render_crop_renders_fraction_of_grid_without_changing_observation():
+    """Fractional render cropping preserves observations."""
+    env = Lattice2DEnv(10, "HPHPH", render_crop=0.5)
+    env.step(0)
+    env.step(2)
+    observation = env._calculate_observation().copy()
+
+    rendered = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", env.render(mode="ansi").getvalue())
+    board = rendered.splitlines()[1:]
+    expected_size = 11
+
+    assert len(board) == expected_size
+    assert all(len(row) == expected_size for row in board)
+    assert np.array_equal(env._calculate_observation(), observation)
+
+def test_render_crop_defaults_to_full_grid():
+    """The default render continues to display the full grid."""
+    env = Lattice2DEnv(10, "HPHPH")
+    rendered = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", env.render(mode="ansi").getvalue())
+    board = rendered.splitlines()[1:]
+
+    assert len(board) == env.grid_length
+    assert all(len(row) == env.grid_length for row in board)
+
+@pytest.mark.parametrize("render_crop", [0, -0.1, 1.1, True, "0.5"])
+def test_render_crop_rejects_invalid_fractions(render_crop):
+    """Render crop must be a numeric fraction in the range (0, 1]."""
+    with pytest.raises(ValueError, match="render_crop"):
+        Lattice2DEnv(10, "HPHPH", render_crop=render_crop)
