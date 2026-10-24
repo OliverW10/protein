@@ -175,3 +175,21 @@ def test_render_crop_rejects_invalid_fractions(render_crop):
     """Render crop must be a numeric fraction in the range (0, 1]."""
     with pytest.raises(ValueError, match="render_crop"):
         Lattice2DEnv(10, "HPHPH", render_crop=render_crop)
+
+def test_lookahead_sets_observation_size():
+    """The configured lookahead controls the feed portion of the observation."""
+    short_lookahead = Lattice2DEnv(10, "HPHPHPHP", lookahead=2)
+    default_lookahead = Lattice2DEnv(10, "HPHPHPHP")
+
+    short_observation, _ = short_lookahead.reset()
+    default_observation, _ = default_lookahead.reset()
+
+    assert short_lookahead.lookahead == 2
+    assert len(default_observation) - len(short_observation) == 3 * 3
+    assert short_lookahead.observation_space.contains(short_observation)
+
+@pytest.mark.parametrize("lookahead", [0, -1, 1.5, True])
+def test_lookahead_rejects_invalid_values(lookahead):
+    """Lookahead must be a positive integer."""
+    with pytest.raises(ValueError, match="lookahead"):
+        Lattice2DEnv(10, "HPHPH", lookahead=lookahead)

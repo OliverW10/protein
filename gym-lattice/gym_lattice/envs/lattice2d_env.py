@@ -8,7 +8,7 @@ from io import StringIO
 import sys
 from math import floor
 from collections import OrderedDict
-from numbers import Real
+from numbers import Integral, Real
 from typing import Any, Callable
 
 import gymnasium as gym
@@ -69,7 +69,7 @@ class Lattice2DEnv(gym.Env):
     """
     metadata = {'render_modes': ['human', 'ansi']}
 
-    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, distance_penalty=0.01, end_ceneterd=True, render_crop: float = 1.0):
+    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, distance_penalty=0.01, end_ceneterd=True, render_crop: float = 1.0, lookahead: int = LOOKAHEAD):
         """Initializes the lattice
 
         Parameters
@@ -89,6 +89,8 @@ class Lattice2DEnv(gym.Env):
             Fraction of the full grid to display along each dimension, from
             greater than 0 to 1. The crop is centered on the chain and only
             affects rendering, not observations.
+        lookahead : int
+            Number of upcoming residues included in the observation.
 
         Raises
         ------
@@ -117,7 +119,10 @@ class Lattice2DEnv(gym.Env):
         # Define action-observation spaces
         self.action_space = spaces.Discrete(4)
         grid_variables = np.full((self.grid_length, self.grid_length), 3)
-        feed_variables = np.full((LOOKAHEAD), 3)
+        if isinstance(lookahead, bool) or not isinstance(lookahead, Integral) or lookahead < 1:
+            raise ValueError("lookahead must be a positive integer")
+        self.lookahead = int(lookahead)
+        feed_variables = np.full((self.lookahead,), 3)
         self.unflattened_observation_space = spaces.Tuple([
             spaces.MultiDiscrete(grid_variables),
             spaces.MultiDiscrete(feed_variables)
@@ -228,7 +233,7 @@ class Lattice2DEnv(gym.Env):
 
     def _calculate_observation(self):
         next_idx = len(self.state)+1
-        next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+LOOKAHEAD].ljust(LOOKAHEAD, '_')]
+        next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+self.lookahead].ljust(self.lookahead, '_')]
         grid = self._draw_grid(self.state)
         observation = (grid.copy(), next_residues)
         flattened_observation = spaces.flatten(self.unflattened_observation_space, observation)
