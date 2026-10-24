@@ -240,7 +240,7 @@ class Lattice2DEnv(gym.Env):
         return flattened_observation, reward, terminated, truncated, info
 
     def _calculate_observation(self):
-        next_idx = len(self.state)+1
+        next_idx = len(self.state)
         next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+LOOKAHEAD].ljust(LOOKAHEAD, '_')]
         grid = self._draw_grid(self.state)
         observation = (grid.copy(), next_residues)
@@ -283,7 +283,7 @@ class Lattice2DEnv(gym.Env):
         # Obtain all x-y indices of elements
         x_free, y_free = np.where(grid_display == '0')
         x_h, y_h = np.where(grid_display == '1')
-        x_p, y_p = np.where(grid_display == '-1')
+        x_p, y_p = np.where(grid_display == '2')
 
         # All unfilled spaces are gray
         for row, col in zip(x_free, y_free):
