@@ -176,6 +176,25 @@ def test_render_crop_rejects_invalid_fractions(render_crop):
     with pytest.raises(ValueError, match="render_crop"):
         Lattice2DEnv(10, "HPHPH", render_crop=render_crop)
 
+def test_render_rgb_array_draws_chain_as_image():
+    """RGB rendering returns an image array with colored residues."""
+    env = Lattice2DEnv(10, "HPHPH")
+
+    image = env.render(mode="rgb_array")
+    midpoint = env.grid_length // 2 * 24 + 12
+
+    assert image.shape == (env.grid_length * 24, env.grid_length * 24, 3)
+    assert image.dtype == np.uint8
+    assert tuple(image[midpoint, midpoint]) == (34, 139, 34)
+
+def test_render_rgb_array_respects_render_crop():
+    """RGB image dimensions reflect the configured render crop."""
+    env = Lattice2DEnv(10, "HPHPH", render_crop=0.5)
+
+    image = env.render(mode="rgb_array")
+
+    assert image.shape == (11 * 24, 11 * 24, 3)
+
 def test_lookahead_sets_observation_size():
     """The configured lookahead controls the feed portion of the observation."""
     short_lookahead = Lattice2DEnv(10, "HPHPHPHP", lookahead=2)

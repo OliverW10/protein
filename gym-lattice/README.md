@@ -77,7 +77,8 @@ For a smaller terminal display, initialize the environment with
 `render_crop=0.5` to show a centered crop that is half the full grid's width and
 height. The default is `1.0` (the full grid); cropping does not change the
 observation returned to an agent. Set `lookahead` to control how many upcoming
-residues are included in the observation (default: `5`).
+residues are included in the observation (default: `5`). To get the current
+chain as an RGB image array, call `env.render(mode="rgb_array")`.
 
 ```python
 from gym_lattice.envs import Lattice2DEnv

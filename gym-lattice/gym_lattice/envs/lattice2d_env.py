@@ -67,9 +67,9 @@ class Lattice2DEnv(gym.Env):
     mechanics model of the conformational and se quence spaces of proteins.
     Marcromolecules 22(10), 3986–3997 (1989)
     """
-    metadata = {'render_modes': ['human', 'ansi']}
+    metadata = {'render_modes': ['human', 'ansi', 'rgb_array']}
 
-    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, distance_penalty=0.01, end_ceneterd=True, render_crop: float = 1.0, lookahead: int = LOOKAHEAD):
+    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, distance_penalty=0.01, center_tail=True, render_crop: float = 1.0, lookahead: int = LOOKAHEAD):
         """Initializes the lattice
 
         Parameters
@@ -130,7 +130,7 @@ class Lattice2DEnv(gym.Env):
         self.observation_space = spaces.flatten_space(self.unflattened_observation_space)
         if isinstance(render_crop, bool) or not isinstance(render_crop, Real) or not 0 < render_crop <= 1:
             raise ValueError("render_crop must be a number greater than 0 and at most 1")
-        self.end_cenetred = end_ceneterd
+        self.center_tail = center_tail
         self.render_crop = render_crop
 
         # Initialize values
@@ -258,8 +258,10 @@ class Lattice2DEnv(gym.Env):
         return self._calculate_observation(), info
 
     def render(self, mode: str = 'human') -> Any:
-        """Renders the environment"""
+        """Render the environment as terminal text or an RGB image."""
 
+        if mode not in ('human', 'ansi', 'rgb_array'):
+            raise ValueError(f"Unsupported render mode: {mode}")
         outfile = StringIO() if mode == 'ansi' else sys.stdout
         grid = self._draw_grid(self.state)
         grid_display = np.flipud(grid).astype(str)
@@ -280,6 +282,25 @@ class Lattice2DEnv(gym.Env):
             row_stop = row_start + crop_height
             col_stop = col_start + crop_width
             grid_display = grid_display[row_start:row_stop, col_start:col_stop]
+        if mode == 'rgb_array':
+            cell_size = 24
+            image = np.full(
+                (grid_display.shape[0] * cell_size, grid_display.shape[1] * cell_size, 3),
+                (225, 225, 225),
+                dtype=np.uint8,
+            )
+            colors = {
+                '1': (34, 139, 34),
+                '2': (0, 180, 200),
+            }
+            for row, col in zip(*np.where(grid_display != '0')):
+                top = int(row) * cell_size
+                left = int(col) * cell_size
+                image[top + 1:top + cell_size - 1, left + 1:left + cell_size - 1] = colors[
+                    grid_display[row, col]
+                ]
+            return image
+
         desc = grid_display.tolist()
 
         # Convert everything to human-readable symbols
@@ -357,12 +378,12 @@ class Lattice2DEnv(gym.Env):
         self.grid.fill(0)
         last_residule = list(chain.keys())[-1]
         for coord, poly in chain.items():
-            if self.end_cenetred:
+            if self.center_tail:
                 trans_x, trans_y = tuple(sum(x) for x in zip(self.midpoint, coord, (-last_residule[0], -last_residule[1])))
             else:
                 trans_x, trans_y = tuple(sum(x) for x in zip(self.midpoint, coord))
-            # Recall that a numpy array works by indexing the rows first
-            # before the columns, that's why we interchange.
+            if trans_x < 0 or trans_x >= self.grid_length or trans_y < 0 or trans_y >= self.grid_length:
+                continue
             self.grid[(trans_y, trans_x)] = POLY_TO_INT[poly]
 
         return np.flipud(self.grid)

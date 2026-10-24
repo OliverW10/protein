@@ -3,3 +3,6 @@
 logs**
 .pytest_cache/
 gym-lattice/gym_lattice.egg-info
+_logs
+**.model
+**.model.buffer
