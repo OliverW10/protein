@@ -4,18 +4,35 @@ import json
 import os
 import time
 from collections import OrderedDict
+from typing import Literal, TypedDict
 
 import gymnasium as gym
 import torch
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import StopTrainingOnMaxEpisodes
 
-from dqn.callbacks import EpisodeEpsilonCallback, EpisodeExponentialDecay, GreedyEvalCallback, SaveOnIntervalCallback
-from dqn.envs import make_env, random_sequence_fn
-from dqn.networks import CustomANN, CustomLSTM
+from .callbacks import EpisodeEpsilonCallback, EpisodeExponentialDecay, GreedyEvalCallback, SaveOnIntervalCallback
+from .envs import make_env, random_sequence_fn
+from .networks import CustomANN, CustomLSTM
 
 # Benchmark sequences and their best known energies (energy = -number of H-H contacts so lower is better)
-sequences = OrderedDict([
+class BenchmarkSequence(TypedDict):
+    seq: str
+    best_energy: int
+
+
+class DQNParameters(TypedDict):
+    learning_rate: float
+    batch_size: int
+    gamma: float
+    buffer_size: int
+    learning_starts: int
+    train_freq: tuple[int, Literal["episode"]]
+    gradient_steps: int
+    target_update_interval: int
+
+
+sequences: OrderedDict[str, BenchmarkSequence] = OrderedDict([
     ("20mer-A", {"seq": "HPHPPHHPHPPHPHHPPHPH", "best_energy": -9}),
     ("20mer-B", {"seq": "HHHPPHPHPHPPHPHPHPPH", "best_energy": -10}),
 ])
@@ -58,20 +75,20 @@ log_root = "logs/dqn"
 
 
 # DQN settings written as Stable-Baselines3 arguments
-def dqn_parameters(seq_length, num_episodes):
-    config = OrderedDict([
-        ("learning_rate", 5e-4),
-        ("batch_size", 32),
-        ("gamma", 0.98),
-        ("buffer_size", max(min(50_000, num_episodes // 10), 50 * seq_length)),
+def dqn_parameters(seq_length: int, num_episodes: int) -> DQNParameters:
+    config: DQNParameters = {
+        "learning_rate": 5e-4,
+        "batch_size": 32,
+        "gamma": 0.98,
+        "buffer_size": max(min(50_000, num_episodes // 10), 50 * seq_length),
         # Act randomly for the first 50 * N steps to fill the buffer before learning
-        ("learning_starts", 50 * seq_length),
+        "learning_starts": 50 * seq_length,
         # 10 gradient steps at the end of every episode
-        ("train_freq", (1, "episode")),
-        ("gradient_steps", 10),
+        "train_freq": (1, "episode"),
+        "gradient_steps": 10,
         # Update the target network about every 100 episodes
-        ("target_update_interval", 100 * (seq_length - 1)),
-    ])
+        "target_update_interval": 100 * (seq_length - 1),
+    }
     return config
 
 
@@ -114,7 +131,7 @@ def train(net, seed=7, num_episodes=None, device="auto", tag="", threads=1):
     env = make_env(random_sequence_fn(seq_length, seed), sequence_view, max_steps_factor=max_steps_factor, **env_parameters)
     next_validation = random_sequence_fn(seq_length, validation_seed)
     validation_envs = []
-    for i in range(num_validation):
+    for _ in range(num_validation):
         validation_envs.append(make_env(next_validation(), sequence_view, max_steps_factor=max_steps_factor, **env_parameters))
 
     model = build_model(net, env, seq_length, num_episodes, seed, device, run_dir)
@@ -148,7 +165,7 @@ def train(net, seed=7, num_episodes=None, device="auto", tag="", threads=1):
     return run_dir
 
 
-# Run from the repo folder like: python -m dqn.train --net fc --seed 7
+# Run from the repository root like: python -m Muhammad.dqn.train --net fc --seed 7
 def main():
 
     parser = argparse.ArgumentParser(description="Train a DQN on random HP sequences")

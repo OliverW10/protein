@@ -9,6 +9,9 @@ import numpy as np
 
 from gym_lattice.envs import Lattice2DEnv
 
+def make_env(seq, **kwargs):
+    return Lattice2DEnv(len(seq), seq, **kwargs)
+
 def generate_sequence(length):
     """Generates a random sequence given a length"""
     possible_chars = 'HhPp'
@@ -18,29 +21,33 @@ def generate_invalid_sequence():
     """Generates an invalid sequence of length 10"""
     return ''.join(np.random.choice(list(string.ascii_uppercase + string.digits), size=10))
 
-@pytest.mark.parametrize("penalty", [10, 0, -5.2, 'hello'])
+@pytest.mark.parametrize("penalty", [10, 0, 'hello'])
 def test_init_illegal_collision_penalty(penalty):
     """Exception must be raised when illegal penalty is given"""
     with pytest.raises((ValueError, TypeError)):
         seq = generate_sequence(10)
-        Lattice2DEnv(seq, collision_penalty=penalty)
+        make_env(seq, collision_penalty=penalty)
 
 @pytest.mark.parametrize("penalty", [20, -4, 'hello'])
 def test_init_illegal_trap_penalty(penalty):
     """Exception must be raised when illegal penalty is given"""
     with pytest.raises((ValueError, TypeError)):
         seq = generate_sequence(10)
-        Lattice2DEnv(seq, trap_penalty=penalty)
+        make_env(seq, trap_penalty=penalty)
+
+def test_init_accepts_negative_fractional_collision_penalty():
+    env = make_env("HP", collision_penalty=-5.2)
+    assert env.collision_penalty == -5.2
 
 def test_get_adjacent_coords():
     """Tests private method _get_adjacent_coords()"""
     seq = generate_sequence(10)
-    env = Lattice2DEnv(seq)
+    env = make_env(seq)
     test_coords = (0,0)
     result = env._get_adjacent_coords(test_coords)
     expected =  {
-        0 : (-1,0), 1 : (0,-1), 
-        2 : (0,1),  3 : (1,0)}
+        0 : (-1,0), 1 : (0,1),
+        2 : (0,-1), 3 : (1,0)}
     assert result == expected
 
 @pytest.mark.parametrize("actions,expected_coords", 
@@ -48,7 +55,7 @@ def test_get_adjacent_coords():
 def test_draw_grid(actions, expected_coords):
     """Tests private method _draw_grid()"""
     seq = 'HH'
-    env = Lattice2DEnv(seq)
+    env = make_env(seq)
     result = env._draw_grid(env.state)
     env.step(actions)
     expected = env.grid
@@ -60,7 +67,7 @@ def test_draw_grid(actions, expected_coords):
      ('HP', [0], 0),  ('PPPPH', [0,1,2,3], 0)])
 def test_compute_free_energy(seq, actions, expected):
     """Tests private method _compute_free_energy()"""
-    env = Lattice2DEnv(seq)
+    env = make_env(seq)
     for action in actions:
         env.step(action)
     result = env._compute_free_energy(env.state)
@@ -70,13 +77,13 @@ def test_compute_free_energy(seq, actions, expected):
 def lattice2d_env():
     """Lattice2DEnv with a random sequence"""
     seq = generate_sequence(10)
-    return Lattice2DEnv(seq)
+    return make_env(seq)
 
 @pytest.fixture
 def lattice2d_fixed_env():
     """Lattice2DEnv with a fixed sequence"""
     seq = 'HHHH'
-    return Lattice2DEnv(seq)
+    return make_env(seq)
 
 def test_compute_reward_no_penalty(lattice2d_fixed_env):
     """Test reward function with a normal, no-penalty action"""
@@ -97,7 +104,7 @@ def test_compute_reward_with_collision(lattice2d_fixed_env):
 def test_compute_reward_with_trap():
     """Test reward function when agent is trapped"""
     seq = 'H' * 20 # sequence of 20 Hs
-    env = Lattice2DEnv(seq)
+    env = make_env(seq)
     expected_reward = 3 - (len(seq) * env.trap_penalty) # (12 bonds) - (20 * 0.5)
     # Define sequence of actions that will trap the agent
     actions = [0, 2, 2, 3, 3, 1, 0, 1]
@@ -129,12 +136,12 @@ def test_done_signal(lattice2d_env):
 
 def test_done_seq_length_one():
     """Test that the done signal is set when starting with a sequence of length 1"""
-    env = Lattice2DEnv("H")
+    env = make_env("H")
     assert env.done
 
 def test_trapped():
     """Test that trapped is set as soon as the agent becomes trapped"""
-    env = Lattice2DEnv("PPPPPPPPPP") # has 0 reward
+    env = make_env("PPPPPPPPPP") # has 0 reward
 
     for action in [0, 0, 2, 2, 3, 3, 1]:
         _, _, terminated, _, info = env.step(action)
@@ -195,20 +202,24 @@ def test_render_rgb_array_respects_render_crop():
 
     assert image.shape == (11 * 24, 11 * 24, 3)
 
-def test_lookahead_sets_observation_size():
-    """The configured lookahead controls the feed portion of the observation."""
-    short_lookahead = Lattice2DEnv(10, "HPHPHPHP", lookahead=2)
-    default_lookahead = Lattice2DEnv(10, "HPHPHPHP")
+def test_observation_contains_only_the_grid():
+    """The base environment observation is the flattened lattice grid."""
+    env = Lattice2DEnv(10, "HPHPHPHP")
 
-    short_observation, _ = short_lookahead.reset()
-    default_observation, _ = default_lookahead.reset()
+    observation, _ = env.reset()
 
-    assert short_lookahead.lookahead == 2
-    assert len(default_observation) - len(short_observation) == 3 * 3
-    assert short_lookahead.observation_space.contains(short_observation)
+    assert observation.shape == (env.grid_length * env.grid_length * 3,)
+    assert env.observation_space.contains(observation)
+    assert not hasattr(env, "lookahead")
 
-@pytest.mark.parametrize("lookahead", [0, -1, 1.5, True])
-def test_lookahead_rejects_invalid_values(lookahead):
-    """Lookahead must be a positive integer."""
-    with pytest.raises(ValueError, match="lookahead"):
-        Lattice2DEnv(10, "HPHPH", lookahead=lookahead)
+def test_collision_reward_has_no_distance_shaping():
+    """Moving farther from the origin does not change the base reward."""
+    env = Lattice2DEnv(10, "HHHH", collision_penalty=-2)
+
+    _, first_reward, _, _, _ = env.step(0)
+    _, second_reward, _, _, _ = env.step(0)
+    _, collision_reward, _, _, _ = env.step(3)
+
+    assert first_reward == 0
+    assert second_reward == 0
+    assert collision_reward == -2

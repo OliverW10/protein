@@ -121,10 +121,10 @@ remember that it maps to the standard vim keybindings.
 
 ### Observations
 
-Observations are represented as a 2-dimensional array with `1` representing
-hydrophobic molecules (H), `-1` for polar molecules (P), and `0` for free
-spaces. If you wish to obtain the chain itself, you can do so by accessing
-`info['state_chain']`.
+The base environment returns a flattened, one-hot encoding of the lattice
+grid. It does not include upcoming sequence residues; applications that need
+sequence features can add them with an observation wrapper. If you wish to
+obtain the chain itself, you can do so by accessing `info['state_chain']`.
 
 An episode ends when all polymers are added to the lattice OR if the sequence
 of actions traps the polymer chain (no more valid moves because surrounding
@@ -136,13 +136,14 @@ enter another action.
 This environment computes the reward in the following manner:
 
 ```python
-# Reward at timestep t
+# Base reward at timestep t
 reward_t = state_reward + collision_penalty + trap_penalty
 ```
 
 - The `state_reward` is the number of adjacent H-H molecules in the **final** state. In protein folding, the state_reward is synonymous to computing the Gibbs free energy, i.e., thermodynamic assumption of a stable molecule. Its value is 0 in all timesteps and is only computed at the end of the episode.  
 - The `collision_penalty` at timestep t accounts for collision events whenever the agent chooses to put a molecule at an already-occupied space. Its default value is -2, but this can be adjusted by setting the `collision_penalty` at initialization.
 - The `trap_penalty` is only computed whenever the agent has no more moves left and is unable to finish the task. The episode ends, thus computing the `state_reward`, but subtracts a deduction dependent on the length of the actual sequence.
+- Distance shaping and sequence observations are application-level adapters and are not part of the base environment.
 
 ## Cite us!
 

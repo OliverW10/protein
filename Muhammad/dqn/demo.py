@@ -5,7 +5,7 @@ import random
 import gymnasium as gym
 from stable_baselines3 import DQN
 
-from dqn.evaluate import watch_agent
+from .evaluate import watch_agent
 
 # Each agent's best model on the test proteins (FC 200K seed 21 best / LSTM 200K seed 21 final)
 demo_models = {
@@ -24,7 +24,7 @@ def demo(seq, net):
     watch_agent(model, net, seq)
 
 
-# Run like: python -m dqn.demo HPHPPHHPHPPHPHHPPHPH --net lstm
+# Run from the repository root like: python -m Muhammad.dqn.demo HPHPPHHPHPPHPHHPPHPH --net lstm
 def main():
 
     parser = argparse.ArgumentParser(description="Fold a 20-residue H/P protein with a model")

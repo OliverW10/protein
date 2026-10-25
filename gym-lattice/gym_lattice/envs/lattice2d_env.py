@@ -6,9 +6,9 @@ Implements the 2D Lattice Environment
 # Import gym modules
 from io import StringIO
 import sys
-from math import floor
+from math import floor, isfinite
 from collections import OrderedDict
-from numbers import Integral, Real
+from numbers import Real
 from typing import Any, Callable
 
 import gymnasium as gym
@@ -23,11 +23,6 @@ ACTION_TO_STR = {
 POLY_TO_INT = {
     'H' : 1, 'P' : 2
 }
-LOOKAHEAD = 5
-POLY_TO_OBSERVATION_INT = {
-    '_': 0, 'H' : 1, 'P' : 2
-}
-
 class Lattice2DEnv(gym.Env):
     """A 2-dimensional lattice environment from Dill and Lau, 1989
     [dill1989lattice]_.
@@ -69,7 +64,7 @@ class Lattice2DEnv(gym.Env):
     """
     metadata = {'render_modes': ['human', 'ansi', 'rgb_array']}
 
-    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, distance_penalty=0.01, center_tail=True, render_crop: float = 1.0, lookahead: int = LOOKAHEAD):
+    def __init__(self, max_chain_length: int, seq_fn: Callable[[], str] | str, collision_penalty=-2.0, trap_penalty=0.5, center_tail=True, render_crop: float = 1.0):
         """Initializes the lattice
 
         Parameters
@@ -89,9 +84,6 @@ class Lattice2DEnv(gym.Env):
             Fraction of the full grid to display along each dimension, from
             greater than 0 to 1. The crop is centered on the chain and only
             affects rendering, not observations.
-        lookahead : int
-            Number of upcoming residues included in the observation.
-
         Raises
         ------
         AssertionError
@@ -108,10 +100,22 @@ class Lattice2DEnv(gym.Env):
             logger.error("%r (%s) must be of type 'str'" % (self.seq, type(self.seq)))
             raise
 
+        if (
+            isinstance(collision_penalty, bool)
+            or not isinstance(collision_penalty, Real)
+            or not isfinite(collision_penalty)
+            or collision_penalty >= 0
+        ):
+            raise ValueError("collision_penalty must be a finite negative number")
+        if (
+            isinstance(trap_penalty, bool)
+            or not isinstance(trap_penalty, Real)
+            or not isfinite(trap_penalty)
+            or not 0 <= trap_penalty <= 1
+        ):
+            raise ValueError("trap_penalty must be a number between 0 and 1")
         self.collision_penalty = collision_penalty
         self.trap_penalty = trap_penalty
-        self.distance_penalty = distance_penalty
-
         # Grid attributes
         self.grid_length = 2 * max_chain_length + 1
         self.midpoint = (max_chain_length, max_chain_length)
@@ -119,14 +123,7 @@ class Lattice2DEnv(gym.Env):
         # Define action-observation spaces
         self.action_space = spaces.Discrete(4)
         grid_variables = np.full((self.grid_length, self.grid_length), 3)
-        if isinstance(lookahead, bool) or not isinstance(lookahead, Integral) or lookahead < 1:
-            raise ValueError("lookahead must be a positive integer")
-        self.lookahead = int(lookahead)
-        feed_variables = np.full((self.lookahead,), 3)
-        self.unflattened_observation_space = spaces.Tuple([
-            spaces.MultiDiscrete(grid_variables),
-            spaces.MultiDiscrete(feed_variables)
-        ])
+        self.unflattened_observation_space = spaces.MultiDiscrete(grid_variables)
         self.observation_space = spaces.flatten_space(self.unflattened_observation_space)
         if isinstance(render_crop, bool) or not isinstance(render_crop, Real) or not 0 < render_crop <= 1:
             raise ValueError("render_crop must be a number greater than 0 and at most 1")
@@ -232,12 +229,8 @@ class Lattice2DEnv(gym.Env):
         return flattened_observation, reward, terminated, truncated, info
 
     def _calculate_observation(self):
-        next_idx = len(self.state)+1
-        next_residues = [POLY_TO_OBSERVATION_INT[x] for x in self.seq[next_idx:next_idx+self.lookahead].ljust(self.lookahead, '_')]
         grid = self._draw_grid(self.state)
-        observation = (grid.copy(), next_residues)
-        flattened_observation = spaces.flatten(self.unflattened_observation_space, observation)
-        return flattened_observation
+        return spaces.flatten(self.unflattened_observation_space, grid.copy())
 
     def reset(self, *, seed=None, options=None):
         """Reset the environment and return ``(observation, info)``."""
@@ -428,12 +421,9 @@ class Lattice2DEnv(gym.Env):
         state_reward = self._compute_free_energy(self.state) if self.done else 0
         collision_penalty = self.collision_penalty if collision else 0
         actual_trap_penalty = -floor(len(self.seq) * self.trap_penalty) if is_trapped else 0
-        end_position = list(self.state.keys())[-1]
-        distance_penalty = -self.distance_penalty * (abs(end_position[0]) + abs(end_position[1]))
-
         # Compute reward at timestep, the state_reward is originally
         # negative (Gibbs), so we invert its sign.
-        reward = - state_reward + collision_penalty + actual_trap_penalty + distance_penalty
+        reward = - state_reward + collision_penalty + actual_trap_penalty
 
         return reward
 

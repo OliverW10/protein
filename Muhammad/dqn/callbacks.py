@@ -1,8 +1,8 @@
 import math
+import csv
 import os
 
 import numpy as np
-import pandas as pd
 from stable_baselines3.common.callbacks import BaseCallback
 
 
@@ -92,7 +92,15 @@ class GreedyEvalCallback(BaseCallback):
         self.history.append({"episodes": self.episodes, "score": score})
 
         # Saved every time so the learning curve survives if training stops early
-        pd.DataFrame(self.history).to_csv(os.path.join(self.run_dir, "eval_history.csv"), index=False)
+        with open(
+            os.path.join(self.run_dir, "eval_history.csv"),
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as history_file:
+            writer = csv.DictWriter(history_file, fieldnames=["episodes", "score"])
+            writer.writeheader()
+            writer.writerows(self.history)
         
         self.logger.record("eval/score", score)
 

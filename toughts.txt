@@ -1,0 +1,17 @@
+
+The motivation of the problem is about understanding approaches to solving the larger continuous problem of protein folding, so to strengthen the relevance we should probably demonstrate a kind of problem generalisation between the HP environment and more complex environment.
+Secondary goal of having a well performing model
+
+- Perform a number of experiments with HP environment, hopefully getting a well performing model at the end.
+- Record scientifically each injection (or at least a small selection of)
+- Reperform each change on complex environment and compare effect of change between environments
+
+
+Does pretraining on the general problem improve solving for a specific case.
+Across two training algorithms and two network architectures.
+    Train an appropriate network on the general problem.
+    Retrain on a specific sequence.
+
+Want:
+- Have an interesting problem that appears novel, and a result for it
+- Describe in detail the algorithms and models involved.

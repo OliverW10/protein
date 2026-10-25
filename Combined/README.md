@@ -1,0 +1,59 @@
+# Combined architecture and algorithm benchmark
+
+The experiment runner compares four combinations on random 20-residue HP
+sequences:
+
+- FC-DQN
+- LSTM-DQN
+- FC-PPO
+- LSTM-PPO
+
+The lattice package now returns only its flattened grid and does not apply
+distance shaping. `Oliver.envs` supplies the distance, trap-correction, and
+fold-metric wrappers; `Muhammad.dqn.envs.SequenceObservation` adds the sequence
+and valid-move features used by the LSTM extractor. Both PPO variants use the
+same `CustomANN` or `CustomLSTM` feature extractors as DQN. The LSTM extractor
+reads the full current sequence/action representation at each decision, so it
+does not require a recurrent PPO policy or `sb3-contrib`.
+
+Run a short end-to-end check of all four combinations:
+
+```sh
+python -m Combined.train --smoke
+```
+
+By default, smoke mode trains one seed for 256 environment timesteps per
+combination, evaluates two validation sequences every episode, and tests on
+the two fixed benchmark sequences plus two random test sequences.
+
+Run the full comparison with 100,000 environment timesteps per run and the
+reference seeds:
+
+```sh
+python -m Combined.train
+```
+
+This trains each combination for 100,000 environment steps for each of seeds
+7, 14, and 21. A callback stops training at the requested step count, even if
+the last episode or PPO rollout is incomplete. Validation still runs every
+1,000 completed training episodes; this is an evaluation interval, not the
+training budget. The best validation checkpoint is tested on 100 seeded
+random sequences and the two fixed benchmark sequences. To select a subset or
+alter run sizes, use `--networks`, `--algorithms`, `--seeds`, `--timesteps`,
+`--num-validation`, `--eval-every`, and `--num-test`.
+
+Outputs are written under `logs/combined`: each run stores checkpoints,
+TensorBoard logs, validation history, the final and best models, per-sequence
+test folds, and design settings. `benchmark_summary.csv` collects the
+per-run test metrics for direct comparison.
+
+Generate a Markdown report and validation/test charts from the saved smoke and
+partial-run outputs:
+
+```sh
+python -m Combined.summarize_results
+```
+
+The report and PNG charts are written to `Combined/results/`. Pass
+`--smoke-dir`, `--partial-dir`, or `--output-dir` to use different input or
+output locations.

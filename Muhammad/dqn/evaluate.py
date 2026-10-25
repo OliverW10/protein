@@ -4,9 +4,9 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from dqn.callbacks import greedy_episode
-from dqn.envs import make_env, moves_to_coords, random_sequence_fn
-from dqn.train import num_test, seq_length, sequences, test_seed
+from .callbacks import greedy_episode
+from .envs import make_env, moves_to_coords, random_sequence_fn
+from .train import num_test, seq_length, sequences, test_seed
 
 
 # The 20mer-A/B benchmarks plus the random test proteins (never used in training or validation)

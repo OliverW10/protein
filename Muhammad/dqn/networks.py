@@ -2,23 +2,7 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-
-# Fully connected network for the flattened grid observation
-class CustomANN(BaseFeaturesExtractor):
-
-    def __init__(self, observation_space, features_dim=84, hidden_dim=256):
-
-        super().__init__(observation_space, features_dim)
-
-        # Two hidden layers that shrink the big grid input down to 256 then 84 features
-        self.network = nn.Sequential(
-            nn.Linear(observation_space.shape[0], hidden_dim), nn.ReLU(),
-            nn.Linear(hidden_dim, features_dim), nn.ReLU(),
-        )
-
-    def forward(self, observations):
-
-        return self.network(observations)
+from Oliver.networks import CustomANN
 
 
 # LSTM that reads the sequence view one residue at a time
