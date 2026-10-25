@@ -15,3 +15,5 @@ Across two training algorithms and two network architectures.
 Want:
 - Have an interesting problem that appears novel, and a result for it
 - Describe in detail the algorithms and models involved.
+
+need to justify why policy gradient (or dqn even) are required for the problem (i.e. it is not a "planning problem")

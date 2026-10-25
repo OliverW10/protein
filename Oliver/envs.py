@@ -4,7 +4,7 @@ import math
 import random
 from collections.abc import Callable, Sequence
 from math import floor
-from numbers import Real
+from numbers import Integral, Real
 
 import gymnasium as gym
 import numpy as np
@@ -14,6 +14,7 @@ from gym_lattice.envs import Lattice2DEnv
 
 
 Coordinate = tuple[int, int]
+RESIDUE_TO_OBSERVATION_INT = {"_": 0, "H": 1, "P": 2}
 
 
 def get_lattice_env(env: gym.Env) -> Lattice2DEnv:
@@ -108,6 +109,41 @@ class FoldMetrics(gym.Wrapper):
         return observation, reward, terminated, truncated, info
 
 
+class NextResiduesObservation(gym.ObservationWrapper):
+    """Add a one-hot lookahead of upcoming residues to the grid observation."""
+
+    def __init__(self, env: gym.Env, lookahead: int = 5):
+        if (
+            isinstance(lookahead, bool)
+            or not isinstance(lookahead, Integral)
+            or lookahead < 1
+        ):
+            raise ValueError("lookahead must be a positive integer")
+        super().__init__(env)
+        self.lookahead = int(lookahead)
+        lattice = get_lattice_env(env)
+        self.observation_space = gym.spaces.Dict(
+            {
+                "grid": lattice.observation_space,
+                "next_residues": gym.spaces.MultiDiscrete(
+                    np.full((self.lookahead,), 3, dtype=np.int64)
+                ),
+            }
+        )
+
+    def observation(self, grid_observation: np.ndarray) -> dict[str, np.ndarray]:
+        lattice = get_lattice_env(self.env)
+        next_idx = len(lattice.state)
+        upcoming = lattice.seq[next_idx : next_idx + self.lookahead].ljust(
+            self.lookahead, "_"
+        )
+        next_residues = np.asarray(
+            [RESIDUE_TO_OBSERVATION_INT[residue] for residue in upcoming],
+            dtype=np.int64,
+        )
+        return {"grid": grid_observation, "next_residues": next_residues}
+
+
 def random_sequence_fn(length: int, seed: int) -> Callable[[], str]:
     """Return a reproducible generator of random H/P sequences."""
     if isinstance(length, bool) or not isinstance(length, int) or length < 1:
@@ -126,6 +162,8 @@ def make_env(
     trap_penalty: float = 0.5,
     distance_penalty: float = 0.01,
     max_steps_factor: int = 4,
+    include_next_residues: bool = True,
+    lookahead: int = 5,
 ) -> gym.Env:
     """Build a grid-observation environment with project reward adapters."""
     if isinstance(seq_fn, str):
@@ -156,4 +194,7 @@ def make_env(
     env = GuardAgainstLatticeTrap(env)
     env = DistancePenalty(env, distance_penalty)
     env = TimeLimit(env, max_episode_steps=max_steps_factor * len(first_sequence))
-    return FoldMetrics(env)
+    env = FoldMetrics(env)
+    if include_next_residues:
+        env = gym.wrappers.FlattenObservation(NextResiduesObservation(env, lookahead))
+    return env

@@ -16,18 +16,18 @@ same `CustomANN` or `CustomLSTM` feature extractors as DQN. The LSTM extractor
 reads the full current sequence/action representation at each decision, so it
 does not require a recurrent PPO policy or `sb3-contrib`.
 
-Run a short end-to-end check of all four combinations:
+To run a short end-to-end check of all four combinations, set `SMOKE = True`
+near the top of `Combined/train.py`, then run:
 
 ```sh
-python -m Combined.train --smoke
+python -m Combined.train
 ```
 
 By default, smoke mode trains one seed for 256 environment timesteps per
 combination, evaluates two validation sequences every episode, and tests on
 the two fixed benchmark sequences plus two random test sequences.
 
-Run the full comparison with 100,000 environment timesteps per run and the
-reference seeds:
+For the full comparison, leave `SMOKE = False` and run:
 
 ```sh
 python -m Combined.train
@@ -39,8 +39,15 @@ the last episode or PPO rollout is incomplete. Validation still runs every
 1,000 completed training episodes; this is an evaluation interval, not the
 training budget. The best validation checkpoint is tested on 100 seeded
 random sequences and the two fixed benchmark sequences. To select a subset or
-alter run sizes, use `--networks`, `--algorithms`, `--seeds`, `--timesteps`,
-`--num-validation`, `--eval-every`, and `--num-test`.
+alter run sizes, edit `NETWORKS`, `ALGORITHMS`, `SEEDS`, `TOTAL_TIMESTEPS`,
+`NUM_VALIDATION_SEQUENCES`, `EVALUATION_INTERVAL`, `NUM_TEST_SEQUENCES`,
+`DEVICE`, `THREADS`, or `OUTPUT_DIR` in `Combined/train.py`.
+
+FC environments include a five-residue lookahead by default. It is implemented
+by `Oliver.envs.NextResiduesObservation` and then flattened for the FC policy.
+Pass `include_next_residues=False` to `Oliver.envs.make_env` to use only the
+grid. The LSTM environment omits this adapter because its sequence observation
+already contains the full residue sequence.
 
 Outputs are written under `logs/combined`: each run stores checkpoints,
 TensorBoard logs, validation history, the final and best models, per-sequence

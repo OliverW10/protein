@@ -1,10 +1,16 @@
 import pytest
+import numpy as np
+from gym_lattice.envs import Lattice2DEnv
 from stable_baselines3 import DQN, PPO
 
 from Combined.train import build_model
 from Muhammad.dqn.envs import make_env as make_lstm_env
 from Muhammad.dqn.networks import CustomLSTM
-from Oliver.envs import DistancePenalty, make_env as make_fc_env
+from Oliver.envs import (
+    DistancePenalty,
+    NextResiduesObservation,
+    make_env as make_fc_env,
+)
 from Oliver.networks import CustomANN
 
 
@@ -14,10 +20,32 @@ def test_fc_environment_applies_distance_penalty_outside_the_base_env():
 
     _, reward, _, _, _ = env.step(0)
 
-    assert isinstance(env.env.env, DistancePenalty)
     assert reward == -0.5
     assert not hasattr(env.unwrapped, "distance_penalty")
     assert env.observation_space.contains(env.reset()[0])
+    assert env.observation_space.shape[0] == (
+        env.unwrapped.observation_space.shape[0] + 5 * 3
+    )
+
+
+def test_next_residues_wrapper_exposes_upcoming_residues_and_padding():
+    base_env = Lattice2DEnv(5, "HPHPH")
+    env = NextResiduesObservation(base_env, lookahead=5)
+
+    observation, _ = env.reset()
+
+    assert set(observation) == {"grid", "next_residues"}
+    assert np.array_equal(observation["next_residues"], [2, 1, 2, 1, 0])
+    assert env.observation_space.contains(observation)
+
+    observation, _, _, _, _ = env.step(0)
+    assert np.array_equal(observation["next_residues"], [1, 2, 1, 0, 0])
+
+
+@pytest.mark.parametrize("lookahead", [0, -1, 1.5, True])
+def test_next_residues_wrapper_rejects_invalid_lookahead(lookahead):
+    with pytest.raises(ValueError, match="lookahead"):
+        NextResiduesObservation(Lattice2DEnv(5, "HPHPH"), lookahead=lookahead)
 
 
 def test_lstm_environment_exposes_sequence_and_valid_move_features():

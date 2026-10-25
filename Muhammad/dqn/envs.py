@@ -4,10 +4,6 @@ import gymnasium as gym
 import numpy as np
 
 from Oliver.envs import (
-    DistancePenalty,
-    FoldMetrics,
-    GuardAgainstLatticeTrap,
-    count_contacts,
     get_lattice_env,
     make_env as make_grid_env,
     moves_to_coords,
@@ -61,6 +57,7 @@ def make_env(
         trap_penalty=trap_penalty,
         distance_penalty=distance_penalty,
         max_steps_factor=max_steps_factor,
+        include_next_residues=not sequence_view,
     )
     if sequence_view:
         env = SequenceObservation(env)

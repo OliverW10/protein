@@ -35,7 +35,7 @@ check, not evidence of learned folding performance.
 
 ## Partial full-run training trace
 
-FC-DQN seed 7 has validation entries through 3,000 episodes. The best recorded mean validation score was 0.02 contacts; at the last recorded point it was 0.00. This is an incomplete run and must not be compared as a trained model.
+FC-DQN seed 7 has validation entries through 4,000 episodes. The best recorded mean validation score was 1.74 contacts; at the last recorded point it was 1.40. This is an incomplete run and must not be compared as a trained model.
 
 ## Charts
 

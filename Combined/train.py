@@ -1,6 +1,5 @@
 """Train and compare FC/LSTM feature extractors with DQN and PPO."""
 
-import argparse
 import csv
 import json
 import math
@@ -37,6 +36,19 @@ from Muhammad.dqn.train import (
     validation_seed,
 )
 from Oliver.networks import CustomANN
+
+
+SMOKE = False
+NETWORKS = ["fc", "lstm"]
+ALGORITHMS = ["dqn", "ppo"]
+SEEDS = [7] if SMOKE else [7, 14, 21]
+TOTAL_TIMESTEPS = 256 if SMOKE else 100_000
+NUM_VALIDATION_SEQUENCES = 2 if SMOKE else num_validation
+EVALUATION_INTERVAL = 1 if SMOKE else 1000
+NUM_TEST_SEQUENCES = 2 if SMOKE else num_test
+DEVICE = "auto"
+THREADS = 1
+OUTPUT_DIR = Path("logs/combined")
 
 
 class ExponentialTimestepDecay:
@@ -288,62 +300,39 @@ def train_run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Compare FC/LSTM feature extractors with DQN and PPO."
-    )
-    parser.add_argument("--networks", nargs="+", choices=["fc", "lstm"])
-    parser.add_argument("--algorithms", nargs="+", choices=["dqn", "ppo"])
-    parser.add_argument("--seeds", nargs="+", type=int)
-    parser.add_argument(
-        "--timesteps",
-        type=int,
-        help="Environment steps per model run (default: 100,000; smoke: 256)",
-    )
-    parser.add_argument("--num-validation", type=int)
-    parser.add_argument("--eval-every", type=int)
-    parser.add_argument("--num-test", type=int)
-    parser.add_argument("--device", default="auto")
-    parser.add_argument("--threads", type=int, default=1)
-    parser.add_argument("--output-dir", type=Path, default=Path("logs/combined"))
-    parser.add_argument("--smoke", action="store_true")
-    args = parser.parse_args()
-
-    networks = args.networks or ["fc", "lstm"]
-    algorithms = args.algorithms or ["dqn", "ppo"]
-    seeds = args.seeds or ([7] if args.smoke else [7, 14, 21])
-    total_timesteps = (
-        args.timesteps
-        if args.timesteps is not None
-        else (256 if args.smoke else 100_000)
-    )
-    validations = args.num_validation or (2 if args.smoke else num_validation)
-    eval_frequency = args.eval_every or (1 if args.smoke else 1000)
-    tests = args.num_test if args.num_test is not None else (2 if args.smoke else num_test)
-    if total_timesteps < 1 or validations < 1 or eval_frequency < 1 or tests < 0:
-        parser.error("timesteps and evaluation counts must be positive (test count may be zero)")
+    if (
+        TOTAL_TIMESTEPS < 1
+        or NUM_VALIDATION_SEQUENCES < 1
+        or EVALUATION_INTERVAL < 1
+        or NUM_TEST_SEQUENCES < 0
+    ):
+        raise ValueError(
+            "timesteps and evaluation counts must be positive "
+            "(test count may be zero)"
+        )
 
     results = []
-    for net in networks:
-        for algorithm in algorithms:
-            for seed in seeds:
+    for net in NETWORKS:
+        for algorithm in ALGORITHMS:
+            for seed in SEEDS:
                 results.append(
                     train_run(
                         algorithm,
                         net,
                         seed,
-                        total_timesteps,
-                        validations,
-                        eval_frequency,
-                        tests,
-                        args.device,
-                        args.threads,
-                        args.output_dir,
-                        smoke=args.smoke,
+                        TOTAL_TIMESTEPS,
+                        NUM_VALIDATION_SEQUENCES,
+                        EVALUATION_INTERVAL,
+                        NUM_TEST_SEQUENCES,
+                        DEVICE,
+                        THREADS,
+                        OUTPUT_DIR,
+                        smoke=SMOKE,
                     )
                 )
 
     if results:
-        summary_path = args.output_dir / "benchmark_summary.csv"
+        summary_path = OUTPUT_DIR / "benchmark_summary.csv"
         summary_path.parent.mkdir(parents=True, exist_ok=True)
         with summary_path.open("w", newline="", encoding="utf-8") as summary_file:
             writer = csv.DictWriter(summary_file, fieldnames=list(results[0]))
