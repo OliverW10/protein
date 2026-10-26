@@ -15,6 +15,8 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 from Combined.train import _make_env
 from Oliver.envs import count_contacts, get_lattice_env
+import mcts
+import simulated_annealing
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +25,12 @@ SA_RESULTS = ROOT / "solver_results" / "100k_simulated_annealing" / (
     "simulated_annealing_results.csv"
 )
 OUTPUT_DIR = ROOT / "Combined" / "results" / "latest_run"
+SA_BENCHMARK_RESULTS = OUTPUT_DIR / "simulated_annealing_benchmark_results.csv"
+SA_TIME_BUDGET_MS = 10.0
+SA_RUNS = 2
+SA_FIRST_SEED = 7
+DQN_COLOR = "#4477aa"
+PPO_COLOR = "#ee6677"
 MODEL_PAIRS = [
     ("fc", "dqn", "FC-DQN", "#4477aa"),
     ("fc", "ppo", "FC-PPO", "#66ccee"),
@@ -112,7 +120,8 @@ def plot_training_curves(output_path: Path) -> None:
 
 
 def plot_final_comparison(
-    summary_rows: list[dict[str, str]], output_path: Path
+    summary_rows: list[dict[str, str]],
+    output_path: Path,
 ) -> None:
     rows_by_pair = {
         (row["network"], row["algorithm"]): row for row in summary_rows
@@ -120,24 +129,89 @@ def plot_final_comparison(
     if len(rows_by_pair) != len(MODEL_PAIRS):
         raise ValueError("Expected one final result row for each of the six pairs")
 
-    labels = [label for _, _, label, _ in MODEL_PAIRS]
-    colors = [color for _, _, _, color in MODEL_PAIRS]
+    comparison_pairs = [
+        pair for algorithm in ("dqn", "ppo")
+        for pair in MODEL_PAIRS
+        if pair[1] == algorithm
+    ]
+    labels = [label for _, _, label, _ in comparison_pairs]
+    colors = [
+        DQN_COLOR if algorithm == "dqn" else PPO_COLOR
+        for _, algorithm, _, _ in comparison_pairs
+    ]
     contacts = [
         float(rows_by_pair[(network, algorithm)]["mean_contacts"])
-        for network, algorithm, _, _ in MODEL_PAIRS
+        for network, algorithm, _, _ in comparison_pairs
     ]
 
-    figure, axis = plt.subplots(figsize=(9, 5.5), layout="constrained")
+    figure, axis = plt.subplots(figsize=(10, 6), layout="constrained")
     bars = axis.bar(labels, contacts, color=colors)
     axis.bar_label(bars, fmt="%.2f", padding=3)
-    axis.set_title("Benchmark set results")
-    axis.set_ylabel("Mean H-H contacts (100 random sequences)")
+    axis.set_title(
+        "Mean H-H contacts by trained model\n"
+        "Evaluation on 100 random test sequences"
+    )
+    axis.set_ylabel("Mean H-H contacts")
     axis.set_ylim(0, max(contacts, default=0) + 0.08)
     axis.tick_params(axis="x", rotation=25)
     axis.grid(axis="y", alpha=0.25)
     axis.set_axisbelow(True)
     figure.savefig(output_path, dpi=200)
     plt.close(figure)
+
+
+def run_simulated_annealing_benchmark() -> list[dict[str, str]]:
+    """Run each fixed benchmark sequence twice with a 10 ms wall-clock budget."""
+    benchmark = mcts.load_benchmark(ROOT / "benchmark.txt")
+    rows = []
+    for name, sequence, reference_energy in benchmark:
+        for run in range(SA_RUNS):
+            seed = SA_FIRST_SEED + run
+            start = time.perf_counter()
+            contacts, coords = simulated_annealing.search(
+                sequence,
+                time_budget_seconds=SA_TIME_BUDGET_MS / 1_000,
+                seed=seed,
+            )
+            elapsed = time.perf_counter() - start
+            if len(coords) != len(sequence):
+                raise ValueError(
+                    f"Simulated annealing returned an incomplete fold for {name}"
+                )
+            rows.append(
+                {
+                    "name": name,
+                    "sequence": sequence,
+                    "run": str(run + 1),
+                    "time_budget_ms": f"{SA_TIME_BUDGET_MS:g}",
+                    "seed": str(seed),
+                    "contacts": str(contacts),
+                    "energy": str(-contacts),
+                    "complete": "True",
+                    "elapsed_seconds": f"{elapsed:.6f}",
+                    "reference_energy": (
+                        str(reference_energy) if reference_energy is not None else ""
+                    ),
+                    "meets_reference": (
+                        str(-contacts <= reference_energy)
+                        if reference_energy is not None
+                        else ""
+                    ),
+                    "moves": simulated_annealing.coordinates_to_moves(coords),
+                }
+            )
+            print(
+                f"{name} run={run + 1}/{SA_RUNS}: "
+                f"contacts={contacts}, time={elapsed * 1_000:.3f} ms",
+                flush=True,
+            )
+
+    SA_BENCHMARK_RESULTS.parent.mkdir(parents=True, exist_ok=True)
+    with SA_BENCHMARK_RESULTS.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    return rows
 
 
 def benchmark_20mer_rows(
@@ -470,6 +544,7 @@ def plot_agent_vs_annealing(
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     summary_rows = load_latest_summary_rows()
+    run_simulated_annealing_benchmark()
     plot_training_curves(OUTPUT_DIR / "training_reward_eval_curves.png")
     plot_final_comparison(
         summary_rows, OUTPUT_DIR / "final_test_comparison.png"
