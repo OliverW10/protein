@@ -1,0 +1,12 @@
+{
+  "algorithm": "dqn",
+  "network": "lstm",
+  "seed": 7,
+  "target_timesteps": 200000,
+  "timesteps": 200002,
+  "training_minutes": 23.4,
+  "feature_extractor_parameters": 797696,
+  "test_sequences": 100,
+  "mean_contacts": 4.61,
+  "completion_rate": 1.0
+}

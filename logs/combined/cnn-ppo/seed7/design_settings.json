@@ -1,0 +1,12 @@
+{
+  "algorithm": "ppo",
+  "network": "cnn",
+  "seed": 7,
+  "target_timesteps": 200000,
+  "timesteps": 200704,
+  "training_minutes": 11.9,
+  "feature_extractor_parameters": 906352,
+  "test_sequences": 100,
+  "mean_contacts": 2.45,
+  "completion_rate": 1.0
+}

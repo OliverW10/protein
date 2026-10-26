@@ -1,0 +1,12 @@
+{
+  "algorithm": "ppo",
+  "network": "fc",
+  "seed": 7,
+  "target_timesteps": 200000,
+  "timesteps": 200704,
+  "training_minutes": 2.5,
+  "feature_extractor_parameters": 1328212,
+  "test_sequences": 100,
+  "mean_contacts": 1.89,
+  "completion_rate": 1.0
+}

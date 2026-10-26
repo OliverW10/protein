@@ -1,0 +1,12 @@
+{
+  "algorithm": "ppo",
+  "network": "lstm",
+  "seed": 7,
+  "target_timesteps": 200000,
+  "timesteps": 200704,
+  "training_minutes": 11.7,
+  "feature_extractor_parameters": 488800,
+  "test_sequences": 100,
+  "mean_contacts": 2.22,
+  "completion_rate": 1.0
+}
