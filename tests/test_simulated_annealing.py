@@ -46,6 +46,20 @@ def test_search_is_reproducible_for_a_fixed_seed():
     assert first == second
 
 
+def test_search_accepts_a_time_budget():
+    contacts, coords = search("HHHHHH", time_budget_seconds=1e-9, seed=7)
+
+    assert len(coords) == 6
+    assert len(set(coords)) == 6
+    assert contacts == count_contacts("HHHHHH", coords)
+
+
+@pytest.mark.parametrize("time_budget", [0, -1, float("inf"), float("nan")])
+def test_search_rejects_invalid_time_budget(time_budget):
+    with pytest.raises(ValueError, match="time_budget_seconds"):
+        search("HHHHHH", time_budget_seconds=time_budget)
+
+
 def test_move_proposals_preserve_self_avoiding_bonded_walk():
     coords = tuple((index, 0) for index in range(10))
     rng = random.Random(15)

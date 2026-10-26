@@ -20,7 +20,8 @@ python simulated_annealing.py HPHPPHHPHH --iterations 100000 --seed 7
 
 It prints the best fold found, its non-bonded H-H contact count, and energy
 (negative contact count). Run `python simulated_annealing.py --help` to see
-temperature and iteration options.
+temperature, iteration, and wall-clock budget options. To limit a run to a
+15-millisecond annealing budget, use `--time-budget-ms 15`.
 
 MCTS uses the same `--iterations` and `--seed` options and prints the same
 fold metrics:

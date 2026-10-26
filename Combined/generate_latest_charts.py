@@ -70,7 +70,7 @@ def load_latest_scalars(run_dir: Path) -> dict[str, list[tuple[int, float]]]:
     accumulator.Reload()
     tags = accumulator.Tags()["scalars"]
     result = {}
-    for tag in ("rollout/ep_rew_mean", "eval/score"):
+    for tag in ("rollout/ep_rew_mean",):
         if tag not in tags:
             raise ValueError(f"TensorBoard tag {tag!r} missing from {latest_event}")
         result[tag] = [
@@ -81,19 +81,14 @@ def load_latest_scalars(run_dir: Path) -> dict[str, list[tuple[int, float]]]:
 
 def plot_training_curves(output_path: Path) -> None:
     figure, reward_axis = plt.subplots(figsize=(13, 7), layout="constrained")
-    eval_axis = reward_axis.twinx()
 
     model_handles = []
     for network, algorithm, label, color in MODEL_PAIRS:
         run_dir = RUN_DIR / f"{network}-{algorithm}" / "seed7"
         scalars = load_latest_scalars(run_dir)
         rewards = sorted(scalars["rollout/ep_rew_mean"])
-        eval_scores = sorted(scalars["eval/score"])
-        if not rewards or not eval_scores:
-            raise ValueError(f"Training or eval curve is empty for {label}")
-
-        if not (run_dir / "eval_history.csv").exists():
-            raise FileNotFoundError(f"Missing evaluation history for {label}")
+        if not rewards:
+            raise ValueError(f"Training reward curve is empty for {label}")
 
         reward_axis.plot(
             [step for step, _ in rewards],
@@ -102,44 +97,15 @@ def plot_training_curves(output_path: Path) -> None:
             linewidth=1.8,
             alpha=0.85,
         )
-        eval_axis.plot(
-            [step for step, _ in eval_scores],
-            [score for _, score in eval_scores],
-            color=color,
-            linestyle="--",
-            marker="o",
-            markersize=5,
-            linewidth=1.8,
-        )
         model_handles.append(Line2D([0], [0], color=color, lw=2, label=label))
 
     reward_axis.set_xlabel("Environment timesteps")
     reward_axis.set_ylabel("Training episode reward mean")
-    eval_axis.set_ylabel("Validation mean H-H contacts")
-    reward_axis.set_title(
-        "Latest training run: episode reward (solid) with validation eval (dashed)"
-    )
+    reward_axis.set_title("Latest training run: episode reward")
     reward_axis.grid(alpha=0.25)
     reward_axis.set_xlim(left=0)
-    eval_axis.set_ylim(bottom=0)
     reward_axis.legend(
         handles=model_handles, title="Model pair", loc="upper left", ncol=2
-    )
-    eval_axis.legend(
-        handles=[
-            Line2D([0], [0], color="#333333", lw=2, label="Training reward"),
-            Line2D(
-                [0],
-                [0],
-                color="#333333",
-                lw=2,
-                linestyle="--",
-                marker="o",
-                label="Validation eval",
-            ),
-        ],
-        loc="upper right",
-        frameon=True,
     )
     figure.savefig(output_path, dpi=200)
     plt.close(figure)
@@ -160,41 +126,16 @@ def plot_final_comparison(
         float(rows_by_pair[(network, algorithm)]["mean_contacts"])
         for network, algorithm, _, _ in MODEL_PAIRS
     ]
-    completion = [
-        100 * float(rows_by_pair[(network, algorithm)]["completion_rate"])
-        for network, algorithm, _, _ in MODEL_PAIRS
-    ]
 
-    figure, (contacts_axis, completion_axis) = plt.subplots(
-        1, 2, figsize=(13, 5.5), layout="constrained"
-    )
-    for axis, values, title, ylabel, fmt, pad in (
-        (
-            contacts_axis,
-            contacts,
-            "Held-out test contacts",
-            "Mean H-H contacts (100 random sequences)",
-            "%.2f",
-            0.08,
-        ),
-        (
-            completion_axis,
-            completion,
-            "Completed folds",
-            "Completed episodes (%)",
-            "%.0f%%",
-            8,
-        ),
-    ):
-        bars = axis.bar(labels, values, color=colors)
-        axis.bar_label(bars, fmt=fmt, padding=3)
-        axis.set_title(title)
-        axis.set_ylabel(ylabel)
-        axis.set_ylim(0, max(values, default=0) + pad)
-        axis.tick_params(axis="x", rotation=25)
-        axis.grid(axis="y", alpha=0.25)
-        axis.set_axisbelow(True)
-    figure.suptitle("Final held-out results by model-algorithm pair")
+    figure, axis = plt.subplots(figsize=(9, 5.5), layout="constrained")
+    bars = axis.bar(labels, contacts, color=colors)
+    axis.bar_label(bars, fmt="%.2f", padding=3)
+    axis.set_title("Benchmark set results")
+    axis.set_ylabel("Mean H-H contacts (100 random sequences)")
+    axis.set_ylim(0, max(contacts, default=0) + 0.08)
+    axis.tick_params(axis="x", rotation=25)
+    axis.grid(axis="y", alpha=0.25)
+    axis.set_axisbelow(True)
     figure.savefig(output_path, dpi=200)
     plt.close(figure)
 

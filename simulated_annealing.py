@@ -126,6 +126,7 @@ def search(
     seed: int | None = None,
     progress_callback: Callable[[int, float, int], None] | None = None,
     progress_interval: int = 1_000,
+    time_budget_seconds: float | None = None,
 ) -> tuple[int, Coordinates]:
     """Return the best contact count and fold found by simulated annealing."""
     sequence = validate_sequence(sequence)
@@ -148,21 +149,37 @@ def search(
             "temperatures must be positive and final_temperature "
             "must not exceed initial_temperature"
         )
+    if time_budget_seconds is not None and (
+        not math.isfinite(time_budget_seconds) or time_budget_seconds <= 0
+    ):
+        raise ValueError("time_budget_seconds must be finite and positive")
 
+    start_time = time.perf_counter()
+    deadline = (
+        start_time + time_budget_seconds
+        if time_budget_seconds is not None
+        else None
+    )
     rng = random.Random(seed)
     current: Coordinates = tuple((index, 0) for index in range(len(sequence)))
     current_score = count_contacts(sequence, current)
     best = current
     best_score = current_score
-    start_time = time.perf_counter()
     best_improved = False
 
     for step in range(iterations):
+        elapsed = time.perf_counter() - start_time
+        if deadline is not None and elapsed >= time_budget_seconds:
+            break
         best_improved = False
         candidate = propose_move(current, rng)
         if candidate != current:
             candidate_score = count_contacts(sequence, candidate)
-            progress = step / max(1, iterations - 1)
+            progress = (
+                min(1.0, elapsed / time_budget_seconds)
+                if time_budget_seconds is not None
+                else step / max(1, iterations - 1)
+            )
             temperature = initial_temperature * (
                 final_temperature / initial_temperature
             ) ** progress
@@ -236,25 +253,39 @@ def main() -> None:
         default=0.01,
         help="ending temperature (default: 0.01)",
     )
+    parser.add_argument(
+        "--time-budget-ms",
+        type=float,
+        help="maximum annealing time in milliseconds (stops before the iteration limit)",
+    )
     parser.add_argument("--seed", type=int, default=None, help="random seed")
     args = parser.parse_args()
 
     try:
+        start_time = time.perf_counter()
         contacts, coords = search(
             args.sequence,
             iterations=args.iterations,
             initial_temperature=args.initial_temperature,
             final_temperature=args.final_temperature,
+            time_budget_seconds=(
+                args.time_budget_ms / 1_000
+                if args.time_budget_ms is not None
+                else None
+            ),
             seed=args.seed,
         )
     except ValueError as error:
         parser.error(str(error))
 
+    elapsed = time.perf_counter() - start_time
     print(f"Sequence: {args.sequence}")
     print(f"Moves: {coordinates_to_moves(coords) or '(none)'}")
     print(f"H-H contacts: {contacts}")
     print(f"Energy (negative contacts): {-contacts}")
     print(f"Coordinates: {coords}")
+    if args.time_budget_ms is not None:
+        print(f"Elapsed time: {elapsed * 1_000:.3f} ms")
 
 
 if __name__ == "__main__":
