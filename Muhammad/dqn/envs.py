@@ -26,18 +26,49 @@ class SequenceObservation(gym.ObservationWrapper):
                 "valid_moves": gym.spaces.Box(0, 1, shape=(4,), dtype=np.float32),
             }
         )
+        self._cached_sequence: str | None = None
+        self._cached_observation: np.ndarray | None = None
+        self._cached_actions: tuple[int, ...] = ()
+
+    def _reset_sequence_cache(self, sequence: str) -> None:
+        observation = np.zeros((len(sequence), 7), dtype=np.float32)
+        observation[:, 0] = 1.0
+        residue_channels = np.fromiter(
+            (5 if residue == "P" else 6 for residue in sequence),
+            dtype=np.intp,
+            count=len(sequence),
+        )
+        observation[np.arange(len(sequence)), residue_channels] = 1.0
+        self._cached_sequence = sequence
+        self._cached_observation = observation
+        self._cached_actions = ()
 
     def observation(self, _grid_observation):
         lattice = get_lattice_env(self.env)
-        sequence = np.zeros((len(lattice.seq), 7), dtype=np.float32)
-        for index, residue in enumerate(lattice.seq):
-            if 1 <= index <= len(lattice.actions):
-                sequence[index, 1 + lattice.actions[index - 1]] = 1.0
-            else:
-                sequence[index, 0] = 1.0
-            sequence[index, 5 if residue == "P" else 6] = 1.0
+        if self._cached_sequence != lattice.seq or self._cached_observation is None:
+            self._reset_sequence_cache(lattice.seq)
+
+        actions = tuple(lattice.actions)
+        if (
+            len(actions) < len(self._cached_actions)
+            or actions[: len(self._cached_actions)] != self._cached_actions
+        ):
+            self._reset_sequence_cache(lattice.seq)
+
+        observation = self._cached_observation
+        if observation is None:
+            raise RuntimeError("sequence observation cache was not initialized")
+        for index, action in enumerate(
+            actions[len(self._cached_actions) :],
+            start=len(self._cached_actions),
+        ):
+            residue_index = index + 1
+            observation[residue_index, :5] = 0.0
+            observation[residue_index, 1 + action] = 1.0
+        self._cached_actions = actions
+
         return {
-            "sequence": sequence,
+            "sequence": observation.copy(),
             "valid_moves": valid_move_mask(self.env),
         }
 

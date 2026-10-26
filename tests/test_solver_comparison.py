@@ -86,6 +86,9 @@ def test_repeated_annealing_run_saves_iteration_data_and_charts(tmp_path):
     assert (
         tmp_path / "plots/simulated_annealing_best_so_far_energy.png"
     ).exists()
+    assert (
+        tmp_path / "plots/simulated_annealing_best_known_attainment.png"
+    ).exists()
 
 
 def test_annealing_plots_show_names_without_reference_energy_lines(tmp_path):
@@ -95,9 +98,19 @@ def test_annealing_plots_show_names_without_reference_energy_lines(tmp_path):
             "sequence": "HHHH",
             "iterations": 10,
             "run": 1,
+            "contacts": 1,
             "time_to_final_best_iterations": 5,
             "reference_energy": -2,
-        }
+        },
+        {
+            "name": "sequence-01",
+            "sequence": "HHHH",
+            "iterations": 10,
+            "run": 2,
+            "contacts": 2,
+            "time_to_final_best_iterations": 5,
+            "reference_energy": -2,
+        },
     ]
     progress = [
         {
@@ -144,3 +157,10 @@ def test_annealing_plots_show_names_without_reference_energy_lines(tmp_path):
     assert energy_axis.lines[0].get_linestyle() == "-"
     assert energy_axis.get_legend().get_title().get_text() == "Benchmark sequence"
     assert list(energy_axis.lines[0].get_ydata()) == [0, -2]
+    attainment_axis = figures[2].axes[0]
+    assert attainment_axis.patches[0].get_width() == pytest.approx(75)
+    assert any(
+        line.get_linestyle() == "--"
+        and list(line.get_xdata()) == [100, 100]
+        for line in attainment_axis.lines
+    )

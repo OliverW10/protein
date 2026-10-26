@@ -6,6 +6,12 @@ import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
 
+def _exponential_epsilon(progress, eps_min, eps_max, eps_decay):
+    progress = min(max(progress, 0.0), 1.0)
+    decay = math.exp(-eps_decay * progress)
+    return eps_min + (eps_max - eps_min) * decay
+
+
 # Epsilon that decays once per finished episode instead of every step
 class EpisodeExponentialDecay:
 
@@ -19,9 +25,24 @@ class EpisodeExponentialDecay:
         self.episodes = 0
 
     def __call__(self, progress_remaining):
+        progress = self.episodes / self.total_episodes
+        return _exponential_epsilon(
+            progress, self.eps_min, self.eps_max, self.eps_decay
+        )
 
-        decay = math.exp(-self.eps_decay * self.episodes / self.total_episodes)
-        return self.eps_min + (self.eps_max - self.eps_min) * decay
+
+class TimestepExponentialDecay:
+
+    def __init__(self, eps_min, eps_max, eps_decay):
+        self.eps_min = eps_min
+        self.eps_max = eps_max
+        self.eps_decay = eps_decay
+
+    def __call__(self, progress_remaining):
+        progress = 1.0 - progress_remaining
+        return _exponential_epsilon(
+            progress, self.eps_min, self.eps_max, self.eps_decay
+        )
 
 
 # Counts finished episodes so the schedule knows which episode training is on

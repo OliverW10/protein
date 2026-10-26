@@ -15,8 +15,8 @@ import simulated_annealing
 
 
 DEFAULT_BENCHMARK = Path(__file__).with_name("benchmark.txt")
-DEFAULT_OUTPUT = Path(__file__).parent / "solver_results/150k_simulated_annealing"
-DEFAULT_ITERATIONS = 150_000
+DEFAULT_OUTPUT = Path(__file__).parent / "solver_results/250k_simulated_annealing"
+DEFAULT_ITERATIONS = 250_000
 DEFAULT_RUNS = 5
 PROGRESS_INTERVAL = 1_000
 
@@ -119,13 +119,14 @@ def run_benchmark(
     progress_path = output_dir / "simulated_annealing_progress.csv"
     _write_csv(results_path, results)
     _write_csv(progress_path, progress_rows)
-    time_plot_path, energy_plot_path = plot_results(
+    time_plot_path, energy_plot_path, attainment_plot_path = plot_results(
         results, progress_rows, output_dir, progress_interval
     )
     print(f"Saved results to {results_path}")
     print(f"Saved progress to {progress_path}")
     print(f"Saved iteration bar chart to {time_plot_path}")
     print(f"Saved best-so-far energy chart to {energy_plot_path}")
+    print(f"Saved best-known attainment chart to {attainment_plot_path}")
     return results, progress_rows
 
 
@@ -154,7 +155,7 @@ def plot_results(
     progress_rows: list[dict[str, object]],
     output_dir: Path,
     progress_interval: int = PROGRESS_INTERVAL,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path]:
     """Plot mean iteration-to-best with SD bars and raw per-sequence traces."""
     if not rows or not progress_rows:
         raise ValueError("results and progress data must not be empty")
@@ -164,6 +165,9 @@ def plot_results(
 
     time_plot_path = output_dir / "simulated_annealing_time_to_best_iterations.png"
     energy_plot_path = output_dir / "simulated_annealing_best_so_far_energy.png"
+    attainment_plot_path = (
+        output_dir / "simulated_annealing_best_known_attainment.png"
+    )
 
     figure_height = max(7, 0.62 * len(names))
     figure, axis = plt.subplots(
@@ -250,7 +254,49 @@ def plot_results(
     axis.legend(title="Benchmark sequence", bbox_to_anchor=(1.02, 1), loc="upper left")
     figure.savefig(energy_plot_path, dpi=180, bbox_inches="tight")
     plt.close(figure)
-    return time_plot_path, energy_plot_path
+
+    figure, axis = plt.subplots(
+        figsize=(12, figure_height),
+        constrained_layout=True,
+    )
+    for index, name in enumerate(names):
+        sequence_rows = [row for row in rows if row["name"] == name]
+        reference_energies = {
+            abs(int(row["reference_energy"]))
+            for row in sequence_rows
+            if row["reference_energy"] not in ("", None)
+        }
+        if len(reference_energies) != 1:
+            raise ValueError(
+                f"{name} must have exactly one benchmark reference energy"
+            )
+        reference_contacts = reference_energies.pop()
+        if reference_contacts == 0:
+            raise ValueError(f"{name} has a zero reference energy")
+        percentages = [
+            int(row["contacts"]) / reference_contacts * 100
+            for row in sequence_rows
+        ]
+        mean, standard_deviation = _mean_and_sample_sd(percentages)
+        axis.barh(
+            index,
+            mean,
+            xerr=standard_deviation,
+            color=colors[index],
+            alpha=0.9,
+            capsize=4,
+            error_kw={"elinewidth": 1.2, "capthick": 1.2},
+        )
+    axis.axvline(100, color="black", linestyle="--", linewidth=1.2, label="100% of best known")
+    axis.set_yticks(positions, names, fontsize=9)
+    axis.invert_yaxis()
+    axis.set_xlabel("Best-known contacts achieved (mean ± SD across runs, %)")
+    axis.set_title("Simulated annealing: fraction of best-known solution")
+    axis.grid(axis="x", alpha=0.25)
+    axis.legend(frameon=False)
+    figure.savefig(attainment_plot_path, dpi=180)
+    plt.close(figure)
+    return time_plot_path, energy_plot_path, attainment_plot_path
 
 
 def main() -> None:

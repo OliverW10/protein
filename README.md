@@ -54,14 +54,14 @@ pip install -r requirements.txt
 
 ## Repeated simulated-annealing plots
 
-Run five reproducible 150,000-iteration simulated-annealing runs per benchmark sequence and
+Run five reproducible 250,000-iteration simulated-annealing runs per benchmark sequence and
 generate an iteration-to-best bar chart with standard-deviation error bars,
-plus unsmoothed best-so-far energy curves:
+unsmoothed best-so-far energy curves, and a percentage-of-best-known chart:
 
 ```sh
 PYTHONPATH=. .venv/bin/python plot_simulated_annealing.py
 ```
 
-The default output is `solver_results/150k_simulated_annealing/`. Override
+The default output is `solver_results/250k_simulated_annealing/`. Override
 the run count, iteration budget, seed range, or output directory with
 `--runs`, `--iterations`, `--first-seed`, and `--output-dir`.

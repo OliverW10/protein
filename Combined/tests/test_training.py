@@ -4,6 +4,10 @@ from gym_lattice.envs import Lattice2DEnv
 from stable_baselines3 import DQN, PPO
 
 from Combined.train import build_model
+from Muhammad.dqn.callbacks import (
+    EpisodeExponentialDecay,
+    TimestepExponentialDecay,
+)
 from Muhammad.dqn.envs import make_env as make_lstm_env
 from Muhammad.dqn.networks import CustomLSTM
 from Oliver.envs import (
@@ -12,6 +16,17 @@ from Oliver.envs import (
     make_env as make_fc_env,
 )
 from Oliver.networks import CustomANN
+
+
+def test_timestep_epsilon_decay_matches_episode_decay_progress():
+    timestep_schedule = TimestepExponentialDecay(0.01, 1.0, 5)
+    episode_schedule = EpisodeExponentialDecay(100, 0.01, 1.0, 5)
+
+    for progress in (0.0, 0.25, 0.5, 1.0):
+        episode_schedule.episodes = int(100 * progress)
+        assert timestep_schedule(1.0 - progress) == pytest.approx(
+            episode_schedule(1.0 - progress)
+        )
 
 
 def test_fc_environment_applies_distance_penalty_outside_the_base_env():
@@ -58,6 +73,24 @@ def test_lstm_environment_exposes_sequence_and_valid_move_features():
     assert env.observation_space.contains(observation)
 
 
+def test_lstm_sequence_observation_updates_actions_without_mutating_prior_obs():
+    env = make_lstm_env("HPHPH", sequence_view=True)
+    initial_observation, _ = env.reset()
+    initial_sequence = initial_observation["sequence"].copy()
+
+    next_observation, _, _, _, _ = env.step(0)
+
+    assert not np.shares_memory(
+        initial_observation["sequence"], next_observation["sequence"]
+    )
+    assert np.array_equal(initial_observation["sequence"], initial_sequence)
+    assert np.array_equal(next_observation["sequence"][1, :5], [0, 1, 0, 0, 0])
+    assert next_observation["sequence"][1, 5] == 1
+
+    reset_observation, _ = env.reset()
+    assert np.array_equal(reset_observation["sequence"][1, :5], [1, 0, 0, 0, 0])
+
+
 @pytest.mark.parametrize(
     ("algorithm", "network", "expected_model", "expected_extractor"),
     [
@@ -93,3 +126,21 @@ def test_all_model_combinations_build(
 
     assert isinstance(model, expected_model)
     assert isinstance(extractor, expected_extractor)
+    if network == "lstm":
+        assert extractor.lstm.hidden_size == 128
+        assert extractor.lstm.num_layers == 1
+
+
+def test_combined_dqn_uses_four_gradient_steps_outside_smoke_mode():
+    env = make_fc_env("HPHPH")
+
+    model = build_model(
+        "dqn",
+        "fc",
+        env,
+        seed=7,
+        device="cpu",
+        total_timesteps=64,
+    )
+
+    assert model.gradient_steps == 4

@@ -2,7 +2,6 @@
 
 import csv
 import json
-import math
 import time
 from collections import OrderedDict
 from pathlib import Path
@@ -11,11 +10,11 @@ from typing import TypedDict
 import gymnasium as gym
 import torch
 from stable_baselines3 import DQN, PPO
-from stable_baselines3.common.callbacks import BaseCallback
 
 from Muhammad.dqn.callbacks import (
     GreedyEvalCallback,
     SaveOnIntervalCallback,
+    TimestepExponentialDecay,
     greedy_episode,
 )
 from Muhammad.dqn.envs import make_env, random_sequence_fn
@@ -49,31 +48,9 @@ NUM_TEST_SEQUENCES = 2 if SMOKE else num_test
 DEVICE = "auto"
 THREADS = 1
 OUTPUT_DIR = Path("logs/combined")
-
-
-class ExponentialTimestepDecay:
-    """Decay DQN exploration according to normalized training progress."""
-
-    def __init__(self, eps_min: float, eps_max: float, eps_decay: float):
-        self.eps_min = eps_min
-        self.eps_max = eps_max
-        self.eps_decay = eps_decay
-
-    def __call__(self, progress_remaining: float) -> float:
-        progress = min(max(1.0 - progress_remaining, 0.0), 1.0)
-        decay = math.exp(-self.eps_decay * progress)
-        return self.eps_min + (self.eps_max - self.eps_min) * decay
-
-
-class StopAtTimesteps(BaseCallback):
-    """Stop learning once the requested number of environment steps is reached."""
-
-    def __init__(self, total_timesteps: int):
-        super().__init__()
-        self.total_timesteps = total_timesteps
-
-    def _on_step(self) -> bool:
-        return self.num_timesteps < self.total_timesteps
+LSTM_HIDDEN_DIM = 128
+LSTM_NUM_LAYERS = 1
+COMBINED_DQN_GRADIENT_STEPS = 4
 
 
 def _policy_settings(net: str):
@@ -97,9 +74,15 @@ def build_model(
     """Construct one model using the matching FC or LSTM feature extractor."""
     policy, extractor = _policy_settings(net)
     policy_kwargs = {"features_extractor_class": extractor, "net_arch": []}
+    if net == "lstm":
+        policy_kwargs["features_extractor_kwargs"] = {
+            "hidden_dim": LSTM_HIDDEN_DIM,
+            "num_layers": LSTM_NUM_LAYERS,
+        }
 
     if algorithm == "dqn":
         dqn_kwargs: DQNParameters = dqn_parameters(seq_length, total_timesteps)
+        dqn_kwargs["gradient_steps"] = COMBINED_DQN_GRADIENT_STEPS
         if smoke:
             dqn_kwargs["buffer_size"] = 256
             dqn_kwargs["learning_starts"] = 4
@@ -245,11 +228,9 @@ def train_run(
         SaveOnIntervalCallback(checkpoint_every, str(checkpoint_dir)),
     ]
     if isinstance(model, DQN):
-        model.exploration_schedule = ExponentialTimestepDecay(
+        model.exploration_schedule = TimestepExponentialDecay(
             eps_min, eps_max, eps_decay
         )
-    callbacks.append(StopAtTimesteps(total_timesteps))
-
     print(
         f"Training {net.upper()}-{algorithm.upper()} seed {seed}: "
         f"{total_timesteps:,} timesteps on {model.device}"
@@ -300,27 +281,16 @@ def train_run(
 
 
 def main() -> None:
-    if (
-        TOTAL_TIMESTEPS < 1
-        or NUM_VALIDATION_SEQUENCES < 1
-        or EVALUATION_INTERVAL < 1
-        or NUM_TEST_SEQUENCES < 0
-    ):
-        raise ValueError(
-            "timesteps and evaluation counts must be positive "
-            "(test count may be zero)"
-        )
-
     results = []
-    for net in NETWORKS:
-        for algorithm in ALGORITHMS:
-            for seed in SEEDS:
+    for net in ["lstm"]: #NETWORKS:
+        for algorithm in ["dqn"]: #ALGORITHMS:
+            for seed in [7]: #SEEDS:
                 results.append(
                     train_run(
                         algorithm,
                         net,
                         seed,
-                        TOTAL_TIMESTEPS,
+                        200_000,
                         NUM_VALIDATION_SEQUENCES,
                         EVALUATION_INTERVAL,
                         NUM_TEST_SEQUENCES,
