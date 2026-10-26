@@ -7,9 +7,9 @@ from stable_baselines3 import DQN
 
 from .evaluate import watch_agent
 
-# Each agent's best model on the test proteins (FC 200K seed 21 best / LSTM 200K seed 21 final)
+# Each agent's best model on the test proteins.
 demo_models = {
-    "lstm": "dqn/models/lstm_200k_seed21_final.zip",
+    "lstm": "logs/combined/lstm-dqn/seed7/best_model.zip",
     "fc": "dqn/models/fc_200k_seed21_best.zip",
 }
 
@@ -33,7 +33,6 @@ def main():
     args = parser.parse_args()
 
     # Makes older consoles show the env's colours
-    os.system("")
     gym.logger.min_level = gym.logger.ERROR
 
     if args.seq is None:

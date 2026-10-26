@@ -34,11 +34,13 @@ from Muhammad.dqn.train import (
     test_seed,
     validation_seed,
 )
+from Oliver.envs import make_env as make_grid_env
 from Oliver.networks import CustomANN
+from Willie.custom_cnn import CNNObservation, CustomCNN
 
 
 SMOKE = False
-NETWORKS = ["fc", "lstm"]
+NETWORKS = ["fc", "lstm", "cnn"]
 ALGORITHMS = ["dqn", "ppo"]
 SEEDS = [7] if SMOKE else [7, 14, 21]
 TOTAL_TIMESTEPS = 256 if SMOKE else 100_000
@@ -46,11 +48,13 @@ NUM_VALIDATION_SEQUENCES = 2 if SMOKE else num_validation
 EVALUATION_INTERVAL = 1 if SMOKE else 1000
 NUM_TEST_SEQUENCES = 2 if SMOKE else num_test
 DEVICE = "auto"
-THREADS = 1
+THREADS = 4
 OUTPUT_DIR = Path("logs/combined")
-LSTM_HIDDEN_DIM = 128
-LSTM_NUM_LAYERS = 1
+LSTM_HIDDEN_DIM = 256
+LSTM_NUM_LAYERS = 2
 COMBINED_DQN_GRADIENT_STEPS = 4
+PPO_N_STEPS = 1024
+LOG_INTERVAL = 10
 
 
 def _policy_settings(net: str):
@@ -58,7 +62,24 @@ def _policy_settings(net: str):
         return "MlpPolicy", CustomANN
     if net == "lstm":
         return "MultiInputPolicy", CustomLSTM
+    if net == "cnn":
+        return "CnnPolicy", CustomCNN
     raise ValueError(f"unsupported network: {net}")
+
+
+def _make_env(seq_fn, net: str, episode_limit_factor: int = max_steps_factor):
+    if net == "cnn":
+        env = make_grid_env(
+            seq_fn,
+            include_next_residues=False,
+            max_steps_factor=episode_limit_factor,
+        )
+        return CNNObservation(env)
+    return make_env(
+        seq_fn,
+        sequence_view=(net == "lstm"),
+        max_steps_factor=episode_limit_factor,
+    )
 
 
 def build_model(
@@ -71,7 +92,7 @@ def build_model(
     smoke: bool = False,
     tensorboard_log: str | None = None,
 ) -> DQN | PPO:
-    """Construct one model using the matching FC or LSTM feature extractor."""
+    """Construct one model using the matching feature extractor."""
     policy, extractor = _policy_settings(net)
     policy_kwargs = {"features_extractor_class": extractor, "net_arch": []}
     if net == "lstm":
@@ -79,6 +100,10 @@ def build_model(
             "hidden_dim": LSTM_HIDDEN_DIM,
             "num_layers": LSTM_NUM_LAYERS,
         }
+    elif net == "cnn":
+        policy_kwargs["features_extractor_kwargs"] = {"features_dim": 256}
+        policy_kwargs["net_arch"] = [256]
+        policy_kwargs["normalize_images"] = False
 
     if algorithm == "dqn":
         dqn_kwargs: DQNParameters = dqn_parameters(seq_length, total_timesteps)
@@ -109,7 +134,7 @@ def build_model(
                 learning_rate=1e-4,
                 gamma=0.98,
                 ent_coef=0.001,
-                n_steps=32,
+                n_steps=PPO_N_STEPS,
                 batch_size=8,
                 n_epochs=1,
             )
@@ -123,16 +148,14 @@ def build_model(
             learning_rate=1e-4,
             gamma=0.98,
             ent_coef=0.001,
+            n_steps=PPO_N_STEPS,
         )
     raise ValueError(f"unsupported algorithm: {algorithm}")
 
 
 def _make_validation_envs(net: str, count: int):
     next_validation = random_sequence_fn(seq_length, validation_seed)
-    return [
-        make_env(next_validation(), sequence_view=(net == "lstm"))
-        for _ in range(count)
-    ]
+    return [_make_env(next_validation(), net) for _ in range(count)]
 
 
 def _test_sequences(count: int) -> OrderedDict[str, str]:
@@ -149,7 +172,7 @@ def evaluate_model(model, net: str, test_count: int, output_dir: Path) -> dict:
     """Evaluate greedily on fixed and seeded test sequences; save fold metrics."""
     rows = []
     for name, sequence in _test_sequences(test_count).items():
-        env = make_env(sequence, sequence_view=(net == "lstm"))
+        env = _make_env(sequence, net)
         result = greedy_episode(model, env)
         rows.append(
             {
@@ -207,9 +230,9 @@ def train_run(
     run_dir = output_root / f"{net}-{algorithm}" / f"seed{seed}"
     checkpoint_dir = run_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    env = make_env(
+    env = _make_env(
         random_sequence_fn(seq_length, seed),
-        sequence_view=(net == "lstm"),
+        net,
         max_steps_factor=max_steps_factor,
     )
     validation_envs = _make_validation_envs(net, num_validation_sequences)
@@ -239,7 +262,7 @@ def train_run(
     model.learn(
         total_timesteps=total_timesteps,
         callback=callbacks,
-        log_interval=100,
+        log_interval=LOG_INTERVAL,
         tb_log_name=f"{net}-{algorithm}-seed{seed}",
     )
     training_minutes = round((time.time() - start) / 60, 1)
@@ -282,9 +305,9 @@ def train_run(
 
 def main() -> None:
     results = []
-    for net in ["lstm"]: #NETWORKS:
-        for algorithm in ["dqn"]: #ALGORITHMS:
-            for seed in [7]: #SEEDS:
+    for net in NETWORKS:
+        for algorithm in ["ppo"]: #ALGORITHMS:
+            for seed in [7]:
                 results.append(
                     train_run(
                         algorithm,
@@ -304,9 +327,11 @@ def main() -> None:
     if results:
         summary_path = OUTPUT_DIR / "benchmark_summary.csv"
         summary_path.parent.mkdir(parents=True, exist_ok=True)
-        with summary_path.open("w", newline="", encoding="utf-8") as summary_file:
+        append = summary_path.exists() and summary_path.stat().st_size > 0
+        with summary_path.open("a", newline="", encoding="utf-8") as summary_file:
             writer = csv.DictWriter(summary_file, fieldnames=list(results[0]))
-            writer.writeheader()
+            if not append:
+                writer.writeheader()
             writer.writerows(results)
         print(f"Saved matrix results to {summary_path}")
 

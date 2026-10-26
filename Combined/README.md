@@ -1,27 +1,34 @@
 # Combined architecture and algorithm benchmark
 
-The experiment runner compares four combinations on random 20-residue HP
+The experiment runner compares six combinations on random 20-residue HP
 sequences:
 
 - FC-DQN
 - LSTM-DQN
+- CNN-DQN
 - FC-PPO
 - LSTM-PPO
+- CNN-PPO
 
 The lattice package now returns only its flattened grid and does not apply
 distance shaping. `Oliver.envs` supplies the distance, trap-correction, and
 fold-metric wrappers; `Muhammad.dqn.envs.SequenceObservation` adds the sequence
-and valid-move features used by the LSTM extractor. Both PPO variants use the
-same `CustomANN` or `CustomLSTM` feature extractors as DQN. The LSTM extractor
-reads the full current sequence/action representation at each decision, so it
-does not require a recurrent PPO policy or `sb3-contrib`. For faster
-experiments, Combined configures the LSTM with one 128-unit layer and uses
-four DQN gradient steps per episode (one in smoke mode); these are training
-configuration changes that should be evaluated for their effect on learning
-quality.
+and valid-move features used by the LSTM extractor. PPO uses the same matching
+`CustomANN`, `CustomLSTM`, or `CustomCNN` feature extractor as DQN. The LSTM
+extractor reads the full current sequence/action representation at each
+decision, so it does not require a recurrent PPO policy or `sb3-contrib`. For
+faster experiments, Combined uses four DQN gradient steps per episode (one in
+smoke mode); this is a training configuration change that should be evaluated
+for its effect on learning quality.
 
-To run a short end-to-end check of all four combinations, set `SMOKE = True`
-near the top of `Combined/train.py`, then run:
+The CNN uses Willie's five-channel lattice representation (H/P occupancy,
+residue index, next-residue type, and fold progress) with a custom convolutional
+feature extractor. Select it with `cnn` in `NETWORKS`; CNN environments omit
+the flattened FC lookahead because the next-residue feature is encoded as an
+image channel.
+
+To run a short end-to-end check, set `SMOKE = True` near the top of
+`Combined/train.py`, then run:
 
 ```sh
 python -m Combined.train
@@ -47,7 +54,7 @@ alter run sizes, edit `NETWORKS`, `ALGORITHMS`, `SEEDS`, `TOTAL_TIMESTEPS`,
 `NUM_VALIDATION_SEQUENCES`, `EVALUATION_INTERVAL`, `NUM_TEST_SEQUENCES`,
 `DEVICE`, `THREADS`, or `OUTPUT_DIR` in `Combined/train.py`.
 
-FC environments include a five-residue lookahead by default. It is implemented
+FC environments include a 20-residue lookahead by default. It is implemented
 by `Oliver.envs.NextResiduesObservation` and then flattened for the FC policy.
 Pass `include_next_residues=False` to `Oliver.envs.make_env` to use only the
 grid. The LSTM environment omits this adapter because its sequence observation

@@ -3,6 +3,7 @@ import numpy as np
 from gym_lattice.envs import Lattice2DEnv
 from stable_baselines3 import DQN, PPO
 
+import Combined.train as training
 from Combined.train import build_model
 from Muhammad.dqn.callbacks import (
     EpisodeExponentialDecay,
@@ -16,6 +17,7 @@ from Oliver.envs import (
     make_env as make_fc_env,
 )
 from Oliver.networks import CustomANN
+from Willie.custom_cnn import CNNObservation, CustomCNN
 
 
 def test_timestep_epsilon_decay_matches_episode_decay_progress():
@@ -39,7 +41,7 @@ def test_fc_environment_applies_distance_penalty_outside_the_base_env():
     assert not hasattr(env.unwrapped, "distance_penalty")
     assert env.observation_space.contains(env.reset()[0])
     assert env.observation_space.shape[0] == (
-        env.unwrapped.observation_space.shape[0] + 5 * 3
+        env.unwrapped.observation_space.shape[0] + 20 * 3
     )
 
 
@@ -96,18 +98,16 @@ def test_lstm_sequence_observation_updates_actions_without_mutating_prior_obs():
     [
         ("dqn", "fc", DQN, CustomANN),
         ("dqn", "lstm", DQN, CustomLSTM),
+        ("dqn", "cnn", DQN, CustomCNN),
         ("ppo", "fc", PPO, CustomANN),
         ("ppo", "lstm", PPO, CustomLSTM),
+        ("ppo", "cnn", PPO, CustomCNN),
     ],
 )
 def test_all_model_combinations_build(
     algorithm, network, expected_model, expected_extractor
 ):
-    env = (
-        make_lstm_env("HPHPH", sequence_view=network == "lstm")
-        if network == "lstm"
-        else make_fc_env("HPHPH")
-    )
+    env = training._make_env("HPHPH", network)
 
     model = build_model(
         algorithm,
@@ -127,12 +127,32 @@ def test_all_model_combinations_build(
     assert isinstance(model, expected_model)
     assert isinstance(extractor, expected_extractor)
     if network == "lstm":
-        assert extractor.lstm.hidden_size == 128
-        assert extractor.lstm.num_layers == 1
+        assert extractor.lstm.hidden_size == 256
+        assert extractor.lstm.num_layers == 2
+    elif network == "cnn":
+        assert env.observation_space.shape == (5, 11, 11)
+        assert extractor.features_dim == 256
+
+
+def test_cnn_observation_encodes_fold_and_next_residue():
+    env = training._make_env("HPHPH", "cnn")
+
+    observation, _ = env.reset()
+
+    assert isinstance(env, CNNObservation)
+    assert observation.shape == (5, 11, 11)
+    assert observation.dtype == np.float32
+    assert env.observation_space.contains(observation)
+    assert observation[0, 5, 5] == 1.0
+    assert not observation[3].any()
+    assert np.allclose(observation[4], 1 / 5)
+
+    observation, _, _, _, _ = env.step(0)
+    assert observation[3].all()
 
 
 def test_combined_dqn_uses_four_gradient_steps_outside_smoke_mode():
-    env = make_fc_env("HPHPH")
+    env = training._make_env("HPHPH", "fc")
 
     model = build_model(
         "dqn",
@@ -144,3 +164,44 @@ def test_combined_dqn_uses_four_gradient_steps_outside_smoke_mode():
     )
 
     assert model.gradient_steps == 4
+
+
+@pytest.mark.parametrize("smoke", [True, False])
+def test_combined_ppo_uses_1024_step_rollouts(smoke):
+    env = training._make_env("HPHPH", "fc")
+
+    model = build_model(
+        "ppo",
+        "fc",
+        env,
+        seed=7,
+        device="cpu",
+        total_timesteps=64,
+        smoke=smoke,
+    )
+
+    assert model.n_steps == 1024
+
+
+def test_main_appends_benchmark_summary_without_duplicate_header(tmp_path, monkeypatch):
+    summary_path = tmp_path / "benchmark_summary.csv"
+    summary_path.write_text("algorithm,network,seed\nppo,lstm,1\n", encoding="utf-8")
+    monkeypatch.setattr(training, "OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(training, "NETWORKS", ["fc"])
+    monkeypatch.setattr(
+        training,
+        "train_run",
+        lambda *args, **kwargs: {
+            "algorithm": "ppo",
+            "network": "fc",
+            "seed": 7,
+        },
+    )
+
+    training.main()
+
+    assert summary_path.read_text(encoding="utf-8").splitlines() == [
+        "algorithm,network,seed",
+        "ppo,lstm,1",
+        "ppo,fc,7",
+    ]

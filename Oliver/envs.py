@@ -112,7 +112,7 @@ class FoldMetrics(gym.Wrapper):
 class NextResiduesObservation(gym.ObservationWrapper):
     """Add a one-hot lookahead of upcoming residues to the grid observation."""
 
-    def __init__(self, env: gym.Env, lookahead: int = 5):
+    def __init__(self, env: gym.Env, lookahead: int = 20):
         if (
             isinstance(lookahead, bool)
             or not isinstance(lookahead, Integral)
@@ -163,7 +163,7 @@ def make_env(
     distance_penalty: float = 0.01,
     max_steps_factor: int = 4,
     include_next_residues: bool = True,
-    lookahead: int = 5,
+    lookahead: int = 20,
 ) -> gym.Env:
     """Build a grid-observation environment with project reward adapters."""
     if isinstance(seq_fn, str):
