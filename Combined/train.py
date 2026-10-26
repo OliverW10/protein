@@ -36,7 +36,7 @@ from Muhammad.dqn.train import (
 )
 from Oliver.envs import make_env as make_grid_env
 from Oliver.networks import CustomANN
-from Willie.custom_cnn import CNNObservation, CustomCNN
+from Willie.custom_cnn import CNN_FEATURES_DIM, CNNObservation, CustomCNN
 
 
 SMOKE = False
@@ -45,16 +45,17 @@ ALGORITHMS = ["dqn", "ppo"]
 SEEDS = [7] if SMOKE else [7, 14, 21]
 TOTAL_TIMESTEPS = 256 if SMOKE else 100_000
 NUM_VALIDATION_SEQUENCES = 2 if SMOKE else num_validation
-EVALUATION_INTERVAL = 1 if SMOKE else 1000
+EVALUATION_INTERVAL = 1 if SMOKE else 200
 NUM_TEST_SEQUENCES = 2 if SMOKE else num_test
 DEVICE = "auto"
 THREADS = 4
 OUTPUT_DIR = Path("logs/combined")
-LSTM_HIDDEN_DIM = 256
+LSTM_HIDDEN_DIM = 200
 LSTM_NUM_LAYERS = 2
 COMBINED_DQN_GRADIENT_STEPS = 4
 PPO_N_STEPS = 1024
-LOG_INTERVAL = 10
+DQN_LOG_INTERVAL = 25
+PPO_LOG_INTERVAL = 5
 
 
 def _policy_settings(net: str):
@@ -101,8 +102,10 @@ def build_model(
             "num_layers": LSTM_NUM_LAYERS,
         }
     elif net == "cnn":
-        policy_kwargs["features_extractor_kwargs"] = {"features_dim": 256}
-        policy_kwargs["net_arch"] = [256]
+        policy_kwargs["features_extractor_kwargs"] = {
+            "features_dim": CNN_FEATURES_DIM
+        }
+        policy_kwargs["net_arch"] = [CNN_FEATURES_DIM]
         policy_kwargs["normalize_images"] = False
 
     if algorithm == "dqn":
@@ -233,7 +236,7 @@ def train_run(
     env = _make_env(
         random_sequence_fn(seq_length, seed),
         net,
-        max_steps_factor=max_steps_factor,
+        episode_limit_factor=max_steps_factor,
     )
     validation_envs = _make_validation_envs(net, num_validation_sequences)
     model = build_model(
@@ -252,7 +255,7 @@ def train_run(
     ]
     if isinstance(model, DQN):
         model.exploration_schedule = TimestepExponentialDecay(
-            eps_min, eps_max, eps_decay
+            eps_min, eps_max, eps_decay, decay_fraction=0.8
         )
     print(
         f"Training {net.upper()}-{algorithm.upper()} seed {seed}: "
@@ -262,7 +265,7 @@ def train_run(
     model.learn(
         total_timesteps=total_timesteps,
         callback=callbacks,
-        log_interval=LOG_INTERVAL,
+        log_interval=PPO_LOG_INTERVAL if algorithm == "ppo" else DQN_LOG_INTERVAL,
         tb_log_name=f"{net}-{algorithm}-seed{seed}",
     )
     training_minutes = round((time.time() - start) / 60, 1)
@@ -305,8 +308,8 @@ def train_run(
 
 def main() -> None:
     results = []
-    for net in NETWORKS:
-        for algorithm in ["ppo"]: #ALGORITHMS:
+    for net in ["cnn"]:#NETWORKS:
+        for algorithm in ["dqn"]:
             for seed in [7]:
                 results.append(
                     train_run(

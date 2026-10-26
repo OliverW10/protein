@@ -9,6 +9,9 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from Oliver.envs import get_lattice_env
 
 
+CNN_FEATURES_DIM = 128
+
+
 class CNNObservation(gym.ObservationWrapper):
     """Encode the current fold as five image channels for the CNN policy."""
 
@@ -49,19 +52,19 @@ class CNNObservation(gym.ObservationWrapper):
 class CustomCNN(BaseFeaturesExtractor):
     """Convolutional feature extractor for five-channel lattice observations."""
 
-    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256):
+    def __init__(
+        self,
+        observation_space: gym.spaces.Box,
+        features_dim: int = CNN_FEATURES_DIM,
+    ):
         if len(observation_space.shape) != 3:
             raise ValueError("CNN observations must have channels, height, and width")
         super().__init__(observation_space, features_dim)
 
         self.cnn = nn.Sequential(
-            nn.Conv2d(observation_space.shape[0], 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(observation_space.shape[0], 16, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(16, 16, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),
         )

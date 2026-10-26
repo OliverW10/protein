@@ -17,7 +17,11 @@ from Oliver.envs import (
     make_env as make_fc_env,
 )
 from Oliver.networks import CustomANN
-from Willie.custom_cnn import CNNObservation, CustomCNN
+from Willie.custom_cnn import CNN_FEATURES_DIM, CNNObservation, CustomCNN
+
+
+def test_full_run_evaluation_interval_is_200_episodes():
+    assert training.EVALUATION_INTERVAL == 200
 
 
 def test_timestep_epsilon_decay_matches_episode_decay_progress():
@@ -29,6 +33,15 @@ def test_timestep_epsilon_decay_matches_episode_decay_progress():
         assert timestep_schedule(1.0 - progress) == pytest.approx(
             episode_schedule(1.0 - progress)
         )
+
+
+def test_timestep_epsilon_decay_reaches_minimum_after_first_80_percent():
+    schedule = TimestepExponentialDecay(0.01, 1.0, 5, decay_fraction=0.8)
+
+    assert schedule(1.0) == pytest.approx(1.0)
+    assert schedule(0.6) > 0.01
+    assert schedule(0.2) == pytest.approx(0.01)
+    assert schedule(0.0) == pytest.approx(0.01)
 
 
 def test_fc_environment_applies_distance_penalty_outside_the_base_env():
@@ -131,7 +144,7 @@ def test_all_model_combinations_build(
         assert extractor.lstm.num_layers == 2
     elif network == "cnn":
         assert env.observation_space.shape == (5, 11, 11)
-        assert extractor.features_dim == 256
+        assert extractor.features_dim == CNN_FEATURES_DIM == 128
 
 
 def test_cnn_observation_encodes_fold_and_next_residue():

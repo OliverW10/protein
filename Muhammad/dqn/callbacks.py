@@ -33,13 +33,23 @@ class EpisodeExponentialDecay:
 
 class TimestepExponentialDecay:
 
-    def __init__(self, eps_min, eps_max, eps_decay):
+    def __init__(self, eps_min, eps_max, eps_decay, decay_fraction=None):
         self.eps_min = eps_min
         self.eps_max = eps_max
         self.eps_decay = eps_decay
+        self.decay_fraction = decay_fraction
 
     def __call__(self, progress_remaining):
         progress = 1.0 - progress_remaining
+        if self.decay_fraction is not None:
+            if progress >= self.decay_fraction:
+                return self.eps_min
+            progress /= self.decay_fraction
+            final_decay = math.exp(-self.eps_decay)
+            decay = math.exp(-self.eps_decay * progress)
+            return self.eps_min + (self.eps_max - self.eps_min) * (
+                (decay - final_decay) / (1.0 - final_decay)
+            )
         return _exponential_epsilon(
             progress, self.eps_min, self.eps_max, self.eps_decay
         )

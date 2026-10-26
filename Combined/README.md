@@ -25,7 +25,8 @@ The CNN uses Willie's five-channel lattice representation (H/P occupancy,
 residue index, next-residue type, and fold progress) with a custom convolutional
 feature extractor. Select it with `cnn` in `NETWORKS`; CNN environments omit
 the flattened FC lookahead because the next-residue feature is encoded as an
-image channel.
+image channel. Its smaller extractor uses two convolutional layers with 16 and
+32 channels, followed by a 128-dimensional feature layer.
 
 To run a short end-to-end check, set `SMOKE = True` near the top of
 `Combined/train.py`, then run:
@@ -47,7 +48,7 @@ python -m Combined.train
 This trains each combination toward 100,000 environment steps for each of
 seeds 7, 14, and 21. SB3 checks the target between rollouts, so the final
 count may slightly exceed the requested target. Validation still runs every
-1,000 completed training episodes; this is an evaluation interval, not the
+200 completed training episodes; this is an evaluation interval, not the
 training budget. The best validation checkpoint is tested on 100 seeded
 random sequences and the two fixed benchmark sequences. To select a subset or
 alter run sizes, edit `NETWORKS`, `ALGORITHMS`, `SEEDS`, `TOTAL_TIMESTEPS`,
@@ -64,6 +65,16 @@ Outputs are written under `logs/combined`: each run stores checkpoints,
 TensorBoard logs, validation history, the final and best models, per-sequence
 test folds, and design settings. `benchmark_summary.csv` collects the
 per-run test metrics for direct comparison.
+
+Generate charts for the latest completed six-pair run, including TensorBoard
+training reward with validation overlays, held-out results, the best agent's
+20-residue fold, and a comparison with the 100k simulated-annealing runs:
+
+```sh
+python -m Combined.generate_latest_charts
+```
+
+The PNGs are written to `Combined/results/latest_run/`.
 
 Generate a Markdown report and validation/test charts from the saved smoke and
 partial-run outputs:
