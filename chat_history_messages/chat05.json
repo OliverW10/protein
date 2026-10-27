@@ -1,0 +1,21 @@
+[
+  "Create a new python file that lets you control the environment with the arrow keys in the terminal",
+  "In the stable baselines library, what is the default network architecture for the MlpPolicy policy?",
+  "Update the env to have a render_crop argument that draws a smaller grid for easier viewing",
+  "render_crop should be a fraction to render this grid at of the full size",
+  "make lookahead a parameter",
+  "add a option to the render method to draw the sequence as an image",
+  "After then end of the episode render and display the final sequence as an image",
+  "put it in the actual notebook",
+  "Render the image with matplotlib and show the actual chain",
+  "Is there some hook in the stable baseline agents to add an extra tensorboard log field at particular intervals",
+  "Add a callback to run the an episode for each of the predefined sequences in benchmark.txt every 100_000 and record the total reward",
+  "Checkout the DQN_CNN branch, move the files that were added in it to a new folder called Willie and push",
+  "Amend that commit to willie as a coauthor and repush, ask for comfirmation before doing the force push",
+  "Do the same for the DQN branch with Muhammad, this one will require a pull, pause and let me fix the merge conflict",
+  "Resolved",
+  "Read all files in the three user directories and summaize each",
+  "Read python, notebook and other text files but large binary files",
+  "Go into more detail about the models and environments used in the experiments in each",
+  "From the output of muhammad's notebook, summarise the results"
+]

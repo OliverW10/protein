@@ -1,0 +1,13 @@
+[
+  "Add a submodule for https://github.com/OliverW10/gym-lattice and add it as a pip requirement",
+  "Add setup instructions to readme",
+  "There is an error when installing requirements.txt",
+  "Does the submodule need to be commit pinned or can it be latest?",
+  "Update it to always use the latest",
+  "Which venv did you create?",
+  "In the chat history there is a step labeled \"Creating a Virtual Environment\"",
+  "Update doc comments and add type hints to gym-lattice/gym_lattice/envs/lattice2_env.py",
+  "Commit and push the submodule and update the root",
+  "Undo that commit, only make minimal changes to the comments where compatiability has made what is there oudated and remake the commit",
+  "Run 5 of these in parallel"
+]

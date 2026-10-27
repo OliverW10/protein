@@ -1,0 +1,4 @@
+[
+  "Can I parallelise within the actual .learn call with functionality of either gymnasium or stable_baselines, and would this require any changes to my custom environment lattice2d_env.py",
+  "I have removed the top level parallelism, implement the process vectorized environment"
+]

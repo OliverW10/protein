@@ -1,0 +1,5 @@
+[
+  "In a new python script, write a program that will run monte-carlo tree search on the HP model protein folding problem",
+  "add tqdm",
+  "What does the SequenceObservation wrapper do?"
+]

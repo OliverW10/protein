@@ -1,0 +1,6 @@
+[
+  "Generate charts or images of the results of the latest run of the following:\n- Training eval curve for each of the algo-model pairs\n- Bar chart comparing all 6 pairs final result\n- Image of solution one of the n=20 sequences from benchmark.txt from the best of the trained agents\n- Chart of the solution energy and solve/infer time for the best algorithm verses the 100k simulated annealing results",
+  "Can the actual training reward curve be extracted from the tensorboard logs?",
+  "The training has been re-run with eval curves in tact, continue generating the charts as above. For the eval curve one, actually chart the reward curve of each run, and overlay the eval curves",
+  "Rerun the chart generation"
+]

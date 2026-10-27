@@ -1,0 +1,6 @@
+[
+  "Adjust the exploration rate used by the DQN to be exponential for the first 80% and then train with the minimum level for the rest",
+  "What are the architectures of the three agent models",
+  "What is the observation space for each",
+  "What are the n's used for each of the above currently from Combined/train.py"
+]

@@ -1,0 +1,7 @@
+[
+  "Change this cell to run 5 learns in parallel",
+  "Does this work the GIL?",
+  "change to use processes",
+  "I'm getting the error `AttributeError: module '__main__' has no attribute 'train_one'` when I run this cell",
+  "Fix it"
+]

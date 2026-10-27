@@ -1,0 +1,7 @@
+[
+  "Summarize what each of the cells in Willie/DQN_CNN_20N.ipynb do",
+  "in Willie creat new python file that implements the custom CCN. Add it as a model option in the traning in Combined",
+  "Use a different log interval for PPO (5) and DQN (25)",
+  "Make the CNN model smaller",
+  "Only use 2 CNN layers"
+]

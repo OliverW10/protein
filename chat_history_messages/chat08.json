@@ -1,0 +1,6 @@
+[
+  "Summaize the techniques in the paper at Downloads/1-s2.0-S0378437122009530-main.pdf and then contrast with the techniques implemented this project",
+  "Does the papers model solve for a single sequence or is it a general solver?",
+  "Remove the parser arguments and just make them variables",
+  "Does the fully connected network observation include the upcoming sequence?"
+]
